@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite both the software and the paper."
+title: "catatonia-two-axes: reproduction code for a dependency-ordered recovery geometry"
+abstract: >-
+  A single self-contained Python script that reproduces every numerical result,
+  figure and source-data table of the paper, re-checks each reported number
+  against the stored results at the precision printed, and renders the
+  manuscript and Supplementary Information to Word.
+authors:
+  - family-names: Saito
+    given-names: Hiroki
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+version: "1.0.0"
+date-released: "2026-08-10"
+license: MIT
+repository-code: "https://github.com/USERNAME/catatonia-two-axes"
+keywords:
+  - catatonia
+  - electroconvulsive therapy
+  - bistable dynamics
+  - maximum principle
+  - propagation failure
+  - active inference
+preferred-citation:
+  type: article
+  title: "Catatonia recovers along two separable intervention axes that constrain electroconvulsive therapy"
+  authors:
+    - family-names: Saito
+      given-names: Hiroki
+  year: 2026
+  journal: "Preprint"
