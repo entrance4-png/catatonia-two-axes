@@ -2,7 +2,7 @@
 
 Reproduction code for
 
-> **Catatonia recovers along two separable intervention axes that constrain electroconvulsive therapy**
+> **Catatonia recovery separates two intervention axes that constrain electroconvulsive therapy**
 > H. Saito
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
@@ -108,7 +108,7 @@ placeholder, which is deliberate: it is the last thing to fix before submission.
 
 If you use this code, please cite the software (Zenodo DOI above) and the paper.
 `CITATION.cff` is machine-readable and GitHub renders it as a "Cite this
-repository" button.
+repository" button. ORCID: [0000-0002-4964-8559](https://orcid.org/0000-0002-4964-8559).
 
 ## License
 

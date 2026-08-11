@@ -6,12 +6,13 @@ abstract: >-
   figure and source-data table of the paper, re-checks each reported number
   against the stored results at the precision printed, and renders the
   manuscript and Supplementary Information to Word.
+type: software
 authors:
   - family-names: Saito
     given-names: Hiroki
-    orcid: "https://orcid.org/0000-0000-0000-0000"
-version: "1.0.0"
-date-released: "2026-08-10"
+    orcid: "https://orcid.org/0000-0002-4964-8559"
+version: "1.0.1"
+date-released: "2026-08-11"
 license: MIT
 repository-code: "https://github.com/USERNAME/catatonia-two-axes"
 keywords:
@@ -23,9 +24,10 @@ keywords:
   - active inference
 preferred-citation:
   type: article
-  title: "Catatonia recovers along two separable intervention axes that constrain electroconvulsive therapy"
+  title: "Catatonia recovery separates two intervention axes that constrain electroconvulsive therapy"
   authors:
     - family-names: Saito
       given-names: Hiroki
+      orcid: "https://orcid.org/0000-0002-4964-8559"
   year: 2026
   journal: "Preprint"
