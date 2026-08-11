@@ -5,8 +5,8 @@ Reproduction code for
 > **Catatonia recovery separates two intervention axes that constrain electroconvulsive therapy**
 > H. Saito
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
-[![reproduce](https://github.com/USERNAME/catatonia-two-axes/actions/workflows/reproduce.yml/badge.svg)](https://github.com/USERNAME/catatonia-two-axes/actions/workflows/reproduce.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21880298.svg)](https://doi.org/10.5281/zenodo.21880298)
+[![reproduce](https://github.com/entrance4-png/catatonia-two-axes/actions/workflows/reproduce.yml/badge.svg)](https://github.com/entrance4-png/catatonia-two-axes/actions/workflows/reproduce.yml)
 
 Everything is in one file, `saito_two_axes_reproduce.py`: the model, every
 analysis reported in the paper, the figures, the source-data workbook, a
@@ -17,7 +17,7 @@ together with the code that renders them to Word.
 ## Install
 
 ```bash
-git clone https://github.com/USERNAME/catatonia-two-axes.git
+git clone https://github.com/entrance4-png/catatonia-two-axes.git
 cd catatonia-two-axes
 python -m venv .venv && source .venv/bin/activate    # optional
 pip install -r requirements.txt
@@ -106,7 +106,9 @@ placeholder, which is deliberate: it is the last thing to fix before submission.
 
 ## Citation
 
-If you use this code, please cite the software (Zenodo DOI above) and the paper.
+If you use this code, please cite the software and the paper. The Zenodo DOI
+[10.5281/zenodo.21880298](https://doi.org/10.5281/zenodo.21880298) is the concept
+DOI: it represents all versions and always resolves to the latest one.
 `CITATION.cff` is machine-readable and GitHub renders it as a "Cite this
 repository" button. ORCID: [0000-0002-4964-8559](https://orcid.org/0000-0002-4964-8559).
 
