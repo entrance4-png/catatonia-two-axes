@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-catatonia_two_axes_reproduce.py  (v3, Journal of Mathematical Biology version)
+catatonia_two_axes_reproduce.py  (v3.1, Journal of Mathematical Biology version)
 
 Self-contained reproduction, figure and self-check script for
 
@@ -25,6 +25,11 @@ v3  the preprint text, its audit and the docx renderer were removed; the
     journal manuscript is maintained separately as
     manuscript/catatonia_two_axes_JMB.docx.  Computations, figures and checks
     are unchanged from v2.
+v3.1 two transcription errors in the published aggregate data (run_published_data)
+    corrected against Bot et al. (2026): Lee 2000 remission 67 per cent, not 0
+    (Table 1), and Thamizh 2016 C2 BFCRS after treatment 0, not 10 (Table 2).
+    The depth-on-dose statistics change (slope -0.04, P = 0.77; rho = -0.06,
+    P = 0.79); the case-level window and its binomial P are unchanged.
 
 Model (Saito 2026a, Research Square rs-10620384)
 ------------------------------------------------
@@ -1393,7 +1398,7 @@ BOT_T2 = [  # label, N, BFCRS pre, SD pre, BFCRS post, mean dose (mg)
     ("Seetharaman 2021 C1", 1, 18, None, 0, 8.0), ("Seetharaman 2021 C2", 1, 27, None, 4, 10.0),
     ("Seetharaman 2021 C3", 1, 32, None, 6, 10.0), ("Sharma 2017", 5, 16.3, 4.5, 0, 2.2),
     ("Suchandra 2021 2mg", 37, 12, None, 6, 2.0), ("Suchandra 2021 4mg", 20, 15, None, 7.5, 4.0),
-    ("Thamizh 2016 C2", 1, 12, None, 10, 8.0), ("Thamizh 2016 C4", 1, 9, None, 0, 8.0)]
+    ("Thamizh 2016 C2", 1, 12, None, 0, 8.0), ("Thamizh 2016 C4", 1, 9, None, 0, 8.0)]
 
 BOT_T1 = [  # study, N, highest daily lorazepam-equivalent dose, response %, remission %
     ("Aloysi 2011",4,6,100,0), ("Appiani 2023",22,2,27,None), ("Benazzi 1991",4,14,100,None),
@@ -1402,7 +1407,7 @@ BOT_T1 = [  # study, N, highest daily lorazepam-equivalent dose, response %, rem
     ("England 2011",25,16,96,28), ("Fricchione 1983",4,24,100,100), ("Hatta 2007",41,13.6,49,2),
     ("Huang 2005",14,7.2,100,None), ("Huang 2013",12,7.2,100,100), ("Hung and Huang 2006",7,7.2,100,100),
     ("Jaimes-Albornoz 2013",7,10,71,43), ("Johnson 2022",3,14,0,0), ("Kritzinger 2001",9,2,67,None),
-    ("Layek 2022",66,16,82,None), ("Lee 2000",24,16,79,0), ("Lin and Huang 2013",21,8.25,100,None),
+    ("Layek 2022",66,16,82,None), ("Lee 2000",24,16,79,67), ("Lin and Huang 2013",21,8.25,100,None),
     ("Lin 2016",30,8.25,84,79), ("Lin 2017",21,8.25,90,86), ("Martenyi 1989",4,6,100,None),
     ("Miles 2019",7,20,100,14), ("Mishra 2023",3,2,100,100), ("Nahar 2017",36,8,75,50),
     ("Narayanaswamy 2012",99,8,32,32), ("Northoff 1995",18,10,67,None), ("Northoff 1998",22,4,59,59),
@@ -1694,10 +1699,10 @@ def self_check(R):
         check("published data: highest dose (printed 20 mg)", P["dose_hi"], 20.0, 1e-9)
         check("depth spans 0.00 (printed)", P["depth_lo"], 0.0, 1e-9)
         check("depth spans 1.00 (printed)", P["depth_hi"], 1.0, 1e-9)
-        check("depth on log dose, slope (printed -0.14)", P["depth_slope"], -0.14, 5e-3)
-        check("depth on log dose, P (printed 0.35)", P["depth_p"], 0.35, 5e-3)
-        check("depth Spearman rho (printed -0.15)", P["depth_rho"], -0.15, 5e-3)
-        check("depth Spearman P (printed 0.50)", P["depth_rho_p"], 0.50, 5e-3)
+        check("depth on log dose, slope (printed -0.04)", P["depth_slope"], -0.04, 5e-3)
+        check("depth on log dose, P (printed 0.77)", P["depth_p"], 0.77, 5e-3)
+        check("depth Spearman rho (printed -0.06)", P["depth_rho"], -0.06, 5e-3)
+        check("depth Spearman P (printed 0.79)", P["depth_rho_p"], 0.79, 5e-3)
         check("response rate on dose, P (printed 0.31)", P["response_p"], 0.31, 5e-3)
         check("individually reported patients (printed ten)", P["n_cases"], 10, 0)
         check("patients in the 35-65 per cent window (printed none)", P["n_in_window"], 0, 0)

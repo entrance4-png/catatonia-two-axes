@@ -62,6 +62,25 @@ def panel_label(ax, s, dx=-0.16, dy=1.06):
             fontweight="bold", va="top", ha="left")
 repro.panel_label = panel_label
 
+# On log axes the minor tick labels (2x10^0, 3x10^0, ...) collide at the
+# reduced printed width; keep the major labels only.
+import matplotlib.figure, matplotlib.ticker as mticker
+_savefig = matplotlib.figure.Figure.savefig
+def savefig(self, *a, **k):
+    for ax in self.axes:
+        for axis, scale in ((ax.xaxis, ax.get_xscale()), (ax.yaxis, ax.get_yscale())):
+            if scale == "log":
+                lo, hi = axis.get_view_interval()
+                ticks = [t for t in (0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5,
+                                     1, 2, 5, 10, 20, 50, 100, 200, 500, 1000)
+                         if lo <= t <= hi]
+                if 2 <= len(ticks) <= 7:
+                    axis.set_major_locator(mticker.FixedLocator(ticks))
+                    axis.set_major_formatter(mticker.FuncFormatter(lambda v, _: f"{v:g}"))
+                axis.set_minor_formatter(mticker.NullFormatter())
+    return _savefig(self, *a, **k)
+matplotlib.figure.Figure.savefig = savefig
+
 fmts = [f.strip() for f in args.formats.split(",") if f.strip()]
 for k, fn in enumerate((repro.fig1, repro.fig2, repro.fig3, repro.fig4, repro.fig5), 1):
     for ext in fmts:

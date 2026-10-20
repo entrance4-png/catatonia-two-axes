@@ -16,7 +16,7 @@ there: a0 = 0.60, a1 = 0.15, p = 2, eps = 0.02, rho = 1, kappa = 0.6.
 
 | File | What it is |
 |---|---|
-| `catatonia_two_axes_reproduce.py` | One self-contained script (v3): every reported value, the self-check of each against the printed value (84 checks), the five figures, the source-data workbook and the secondary analysis of published aggregate data. No inputs. |
+| `catatonia_two_axes_reproduce.py` | One self-contained script (v3.1): every reported value, the self-check of each against the printed value (84 checks), the five figures, the source-data workbook and the secondary analysis of published aggregate data. No inputs. |
 | `make_jmb_figures.py` | Redraws Fig1–Fig5 from `two_axes_results.json` in the journal's formats (EPS with embedded fonts, TIFF at 600 dpi, PNG) at a stated printed width, with lower-case panel labels. |
 | `manuscript/catatonia_two_axes_JMB.docx` | The journal manuscript (theorem–proof form, author–year references, figures embedded). |
 | `manuscript/ESM_1.pdf` | Online Resource 1: zero-evidence-rate control for the escape exponent; waiting times to the annihilation locus. |
@@ -39,7 +39,18 @@ regression-based checks by design.
 
 ## Versions
 
-**v3** (this release) removes from the script the preprint manuscript text, its
+**v3.1** (this release) corrects two transcription errors in the published
+aggregate data of `run_published_data` (Fig. 5), found by checking the tables
+against Bot et al. (2026): the remission rate of Lee 2000 is 67 per cent, not 0
+(Table 1 of the source), and the post-treatment BFCRS of Thamizh 2016 case 2 is
+0, not 10 (Table 2 of the source). The depth-on-dose statistics of Fig. 5a change
+(slope on log dose -0.04, P = 0.77; Spearman rho -0.06, P = 0.79; previously
+-0.14, 0.35, -0.15, 0.50) and remain null; the per-patient reductions of Fig. 5b
+become 0, 23, 81, 85 and six values of 100 per cent, the empty interval 23-81
+and the binomial P = 0.037 are unchanged. The four self-checks on these
+statistics carry the corrected printed values. Nothing else changes.
+
+**v3** removed from the script the preprint manuscript text, its
 journal-compliance audit (abstract length, numbered citations) and the docx
 renderer, which belonged to the preprint and no longer match the journal
 manuscript. The script now reproduces numbers, figures and source data only;
