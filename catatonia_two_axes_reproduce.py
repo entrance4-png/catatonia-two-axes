@@ -1,22 +1,33 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-two_axes_paper.py
+catatonia_two_axes_reproduce.py  (v3, Journal of Mathematical Biology version)
 
 Self-contained reproduction, figure and self-check script for
 
-    Two separable axes of intervention in a dependency-ordered recovery geometry
+    Catatonia recovery separates two intervention axes that constrain
+    electroconvulsive therapy
     Hiroki Saito
 
-Every numerical value printed in the manuscript and in Supplementary Notes 1-7 is
-recomputed here and checked against the value as printed.  The script also carries
-the secondary analysis of published aggregate data reported in the Results, draws
-the five display items, writes their source data, holds the text of the manuscript
-and of the Supplementary Information, audits that text against the journal's
-requirements, and renders both documents.  It has no inputs.
+Every numerical value printed in the journal manuscript is recomputed here and
+checked against the value as printed (84 checks).  The script also carries the
+secondary analysis of published aggregate data, draws the five figures and
+writes their source data.  It has no inputs.
 
-Model (ref. 4 of the manuscript)
---------------------------------
+Version history
+---------------
+v1  preprint version (PsyArXiv d6knq): computations, figures, source data,
+    and the preprint text with its journal-compliance audit.
+v2  section 13 added (run_review_additions): the initial-condition example of
+    Remark 2, the passage-time constant of Proposition 8(ii), and the exact
+    two-stage inversion of Proposition 9 with its sensitivity, each self-checked.
+v3  the preprint text, its audit and the docx renderer were removed; the
+    journal manuscript is maintained separately as
+    manuscript/catatonia_two_axes_JMB.docx.  Computations, figures and checks
+    are unchanged from v2.
+
+Model (Saito 2026a, Research Square rs-10620384)
+------------------------------------------------
     g(r,Q) = r (1 - r) (r - a(Q))
     dr0/dt = g(r0,Q) + u(t)
     drk/dt = g(rk,Q) + kappa_k (r_{k-1} - r_k),      k = 1..3
@@ -26,21 +37,20 @@ Model (ref. 4 of the manuscript)
 
 Usage
 -----
-    python3 two_axes_paper.py                # full run
-    python3 two_axes_paper.py --quick        # reduced sample sizes, same structure
-    python3 two_axes_paper.py --no-figures   # values and self-check only
-    python3 two_axes_paper.py --audit        # compliance audit and documents only
+    python3 catatonia_two_axes_reproduce.py                # full run
+    python3 catatonia_two_axes_reproduce.py --quick        # reduced sample sizes
+    python3 catatonia_two_axes_reproduce.py --no-figures   # values and self-check only
+    python3 catatonia_two_axes_reproduce.py --figures-only # redraw from two_axes_results.json
+    python3 make_jmb_figures.py                            # journal figure formats
 
 Outputs
 -------
-    Fig1.png ... Fig5.png                    the five display items
-    two_axes_source_data.xlsx                one sheet per panel
+    Fig1.png ... Fig5.png                    the five figures (300 dpi; see make_jmb_figures.py)
+    two_axes_source_data.xlsx                one sheet per panel (Online Resource 2)
     two_axes_results.json                    every computed quantity
-    two_axes_main.docx                       the manuscript
-    two_axes_supplementary.docx              the Supplementary Information
 
 Requires numpy and scipy.  Matplotlib and openpyxl are needed for the figures and
-the workbook, python-docx for the two documents; all three are optional.
+the workbook; both are optional.
 """
 
 from __future__ import annotations
@@ -704,6 +714,59 @@ def collapse_final(kappa, a, T=1e5):
         return o
     return solve_ivp(f, [0, T], [1.0, 1.0, 1.0], method="LSODA",
                      rtol=1e-11, atol=1e-14).y[:, -1]
+
+
+# ----------------------------------------------------------------------------
+# 13. Checks added for the Journal of Mathematical Biology version (v2)
+#     Theorem 3 initial condition, Proposition 8(ii) passage time, and the
+#     exact two-stage inversion of Proposition 9 with its conditioning.
+# ----------------------------------------------------------------------------
+def run_review_additions():
+    out = {}
+    # (a) Theorem 3 / Remark 2: at subcritical coupling a stage started above
+    #     its unstable rest point recovers; started below it, it does not.
+    a, kappa = A0, 0.01
+    disc = a * a - 4.0 * kappa
+    r_plus = 0.5 * (a + math.sqrt(disc)); r_minus = 0.5 * (a - math.sqrt(disc))
+    out["remark2_kappa"] = kappa; out["remark2_r_plus"] = r_plus; out["remark2_r_minus"] = r_minus
+    def final(start):
+        y0 = [1.0] + [start] * 3
+        s = solve_ivp(chain_rhs, [0, 2.0e4], y0, args=(kappa, a), method="LSODA",
+                      rtol=1e-10, atol=1e-13)
+        return np.round(s.y[:, -1], 6).tolist()
+    out["remark2_final_from_0.59"] = final(0.59)   # above r_plus: stage 1 recovers, stage 2 arrests
+    out["remark2_final_from_0.57"] = final(0.57)   # below r_plus: nothing recovers
+    out["remark2_final_from_0.00"] = final(0.00)   # collapsed start of Theorem 3
+    # (b) Proposition 8(ii): passage time of the first stage through the fold,
+    #     root held at 1, from r1 = 0 to r1 = a, against pi / ((1 - a/2) sqrt(delta)).
+    a = A1; kc = a * a / 4
+    rows = []
+    for delta in (1e-4, 1e-5, 1e-6):
+        k = kc + delta
+        ev = lambda t, y: y[0] - a
+        ev.terminal = True
+        s = solve_ivp(lambda t, y: [(1.0 - y[0]) * (y[0] ** 2 - a * y[0] + k)],
+                      [0, 1e9], [0.0], events=ev, method="LSODA", rtol=1e-10, atol=1e-13)
+        T = float(s.t_events[0][0]); pred = math.pi / ((1.0 - a / 2) * math.sqrt(delta))
+        rows.append(dict(delta=delta, T=T, predicted=pred, ratio=T / pred, excess_time=T - pred))
+    out["passage_time"] = rows
+    # (c) Proposition 9: exact two-stage inversion on the true branch (equal
+    #     coupling), its recovered threshold, and its sensitivity to 1% errors.
+    kappa = 0.003
+    r = branch_exact(kappa, a)
+    r1, r2 = r[1], r[2]
+    def a_two_stage(r1, r2):
+        return (r1 ** 2 * (r1 - r2) - r2 ** 2 * (1 - r2)) / (r1 * (r1 - r2) - r2 * (1 - r2))
+    a_rec = a_two_stage(r1, r2)
+    out["two_stage_recovered_a"] = a_rec
+    out["two_stage_recovered_kappa"] = a_rec * r1 - r1 ** 2
+    def rel(x, ref): return (x - ref) / ref
+    a_e = a_two_stage(r1, r2 * 1.01)
+    out["two_stage_sens_r2_1pct_a"] = rel(a_e, a); out["two_stage_sens_r2_1pct_kappa"] = rel(a_e * r1 - r1 ** 2, kappa)
+    r1e = r1 * 1.01; a_e = a_two_stage(r1e, r2)
+    out["two_stage_sens_r1_1pct_a"] = rel(a_e, a); out["two_stage_sens_r1_1pct_kappa"] = rel(a_e * r1e - r1e ** 2, kappa)
+    out["first_stage_sens_r1_1pct_kappa"] = rel(a * r1e - r1e ** 2, kappa)
+    return out
 
 
 def run_collapse():
@@ -1535,6 +1598,20 @@ def write_source_data(R, path="two_axes_source_data.xlsx"):
 def self_check(R):
     print("\n=== self-check against the printed values ===")
     check("kappa_c at consolidated evidence (a1^2/4)", R["branch"]["kappa_c_a1"], 0.005625, 1e-12)
+    A = R["review_additions"]
+    check("Remark 2: unstable rest point r+ at kappa=0.01 (printed 0.5828)", A["remark2_r_plus"], 0.5828, 5e-5)
+    check("Remark 2: stage 1 from 0.59 recovers (printed 1)", A["remark2_final_from_0.59"][1], 1.0, 1e-3)
+    check("Remark 2: stage 2 from 0.59 arrests below a (printed below 0.60)", float(A["remark2_final_from_0.59"][2] < A0), 1.0, 0)
+    check("Remark 2: stage 1 from 0.57 stays at r- (printed 0.0172)", A["remark2_final_from_0.57"][1], A["remark2_r_minus"], 1e-3)
+    check("Remark 2: stage 1 from 0 stays at r- (printed 0.0172)", A["remark2_final_from_0.00"][1], A["remark2_r_minus"], 1e-3)
+    check("Prop 8(ii): T / prediction at delta=1e-6 (printed 0.99)", A["passage_time"][2]["ratio"], 0.99, 5e-3)
+    check("Prop 8(ii): T - prediction bounded, delta=1e-4 vs 1e-6 (printed O(1))", A["passage_time"][0]["excess_time"] - A["passage_time"][2]["excess_time"], 0.0, 2.0)
+    check("Prop 9: exact two-stage inversion recovers a (printed 0.15000000000001)", A["two_stage_recovered_a"], 0.15, 1e-9)
+    check("Prop 9: sensitivity of a to +1% in r2 (printed 5.8%)", 100 * A["two_stage_sens_r2_1pct_a"], 5.8, 0.1)
+    check("Prop 9: sensitivity of kappa to +1% in r2 (printed 6.9%)", 100 * A["two_stage_sens_r2_1pct_kappa"], 6.9, 0.1)
+    check("Prop 9: sensitivity of a to +1% in r1 (printed -8.8%)", 100 * A["two_stage_sens_r1_1pct_a"], -8.8, 0.1)
+    check("Prop 9: sensitivity of kappa to +1% in r1 (printed -9.7%)", 100 * A["two_stage_sens_r1_1pct_kappa"], -9.7, 0.1)
+    check("Prop 9: first-stage kappa for +1% in r1 (printed 0.8%)", 100 * A["first_stage_sens_r1_1pct_kappa"], 0.8, 0.05)
     check("kappa_c at depleted evidence (a0^2/4)", R["branch"]["kappa_c_a0"], 0.090, 1e-12)
     check("propagation boundary, printed 0.0900005", R["branch"]["propagation_boundary_a0"], 0.090, 2e-5)
     check("closed-form error r2 (printed 2.0%)", 100 * R["branch"]["closed_form_rel_error_r2"], 2.0, 0.15)
@@ -1640,469 +1717,26 @@ def self_check(R):
 
 
 # ============================================================================
-#  PART V.  Manuscript text, compliance audit, and document rendering
+#  PART V.  Entry point
 # ----------------------------------------------------------------------------
-# The full text of the manuscript is carried here so that the audit below runs
-# on the words actually submitted, and so that a transcription slip between the
-# analysis and the document cannot survive a run.
+# v3: the preprint manuscript text, its journal-compliance audit and the docx
+# renderer that earlier versions carried here were removed.  The journal
+# manuscript is maintained as manuscript/catatonia_two_axes_JMB.docx in the
+# repository; this script reproduces its numbers, figures and source data only.
 # ----------------------------------------------------------------------------
-CITE_RE = re.compile(r'(?<=[A-Za-z\)\]α-ωΑ-Ω])'
-                     r'(\d{1,2}(?:[,–-]\d{1,2})*)(?=[\s.,;:)\]*]|$)(?!\s*=)')
-MATH_SUP = [(re.compile(r'10−(\d+)'), '10', lambda m: '−' + m.group(1)),
-            (re.compile(r'× 10(\d+)'), '× 10', lambda m: m.group(1)),
-            (re.compile(r'\]1/p'), ']', lambda m: '1/p')]
 
-
-AFFIL_RE = re.compile(r'^(\d)(?=[A-Z])')
-
-
-def paragraph_runs(text):
-    """Split one paragraph into [(chunk, superscript), ...]."""
-    m = AFFIL_RE.match(text)                     # affiliation line: leading marker
-    if m:
-        return [(m.group(1), True)] + paragraph_runs(text[1:])
-    marks = []
-    for rx, keep, sup in MATH_SUP:
-        for m in rx.finditer(text):
-            marks.append((m.start(), m.end(), keep, sup(m)))
-    for m in CITE_RE.finditer(text):
-        if not any(a <= m.start() < b for a, b, _, _ in marks):
-            marks.append((m.start(), m.end(), '', m.group(1)))
-    marks.sort()
-    out, i = [], 0
-    for a, b, keep, sup in marks:
-        if a > i:
-            out.append((text[i:a], False))
-        if keep:
-            out.append((keep, False))
-        out.append((sup, True))
-        i = b
-    if i < len(text):
-        out.append((text[i:], False))
-    return [(t, s) for t, s in out if t]
-
-
-def cited_numbers(text):
-    """Reference numbers cited in this paragraph, in order, ranges expanded."""
-    out = []
-    for m in CITE_RE.finditer(text):
-        tok = m.group(1)
-        if re.search(r'[–-]', tok) and ',' not in tok:
-            lo, hi = [int(x) for x in re.split(r'[–-]', tok)]
-            out.extend(range(lo, hi + 1))
-        else:
-            out.extend(int(x) for x in tok.split(','))
-    return out
-
-
-def audit(paras):
-    """Journal-compliance audit of the manuscript as carried here."""
-    def words(s):
-        return len(re.findall(r"[A-Za-z0-9][A-Za-z0-9'’-]*", s))
-    txt = '\n'.join(paras)
-    i_abs, i_int = paras.index('Abstract'), paras.index('Introduction')
-    i_met, i_ref = paras.index('Methods'), paras.index('References')
-    body = ' '.join(paras[i_int:i_met])
-    reflist = [p for p in paras[i_ref:] if re.match(r'^\d+\. ', p)]
-    n_refs = len(reflist)
-    # citations in order of first appearance, over everything before the list
-    seen, order_ok, first_bad = [], True, None
-    for p in paras[:i_ref]:
-        if p in ('Abstract', 'Introduction'):
-            continue
-        for n in cited_numbers(p):
-            if n not in seen:
-                if n != len(seen) + 1:
-                    order_ok = False
-                    first_bad = first_bad or (n, len(seen) + 1)
-                seen.append(n)
-    uncited = sorted(set(range(1, n_refs + 1)) - set(seen))
-    res = [
-        ("abstract at most 150 words", words(paras[i_abs + 1]) <= 150, words(paras[i_abs + 1])),
-        ("main text at most 5000 words", words(body) <= 5000, words(body)),
-        ("no em dash anywhere", '—' not in txt, txt.count('—')),
-        ("no en dash outside references and ranges",
-         '–' not in ' '.join(paras[i_int:i_met]), 0),
-        ("references cited in order of first mention", order_ok, first_bad or "ok"),
-        ("every reference is cited", not uncited, uncited or "ok"),
-        ("reference numbers are contiguous",
-         [int(r.split('.')[0]) for r in reflist] == list(range(1, n_refs + 1)), n_refs),
-        ("methods word count reported", True, words(' '.join(paras[i_met:i_ref]))),
-    ]
-    print("\n=== journal-compliance audit ===")
-    for name, ok, val in res:
-        print(f"  [{'OK  ' if ok else 'FAIL'}] {name:<46s} {val}")
-    return all(ok for _, ok, _ in res)
-
-
-FIGURE_FILES = {1: "Fig1.png", 2: "Fig2.png", 3: "Fig3.png",
-                4: "Fig4.png", 5: "Fig5.png"}
-
-
-def _first_mention(paras, n):
-    """Index of the paragraph in which figure n is first cited."""
-    rx = re.compile(r"Fig\. %d[a-e]?\b" % n)
-    for i, p in enumerate(paras):
-        if rx.search(p) and not p.startswith("Fig. "):
-            return i
-    return None
-
-
-def _caption_index(paras, n):
-    for i, p in enumerate(paras):
-        if p.startswith("Fig. %d |" % n):
-            return i
-    return None
-
-
-def plan_layout(paras, figures, layout="inline"):
-    """Return [(kind, payload), ...] where kind is 'text', 'image' or 'caption'.
-
-    layout='inline' places each figure, with its legend, immediately after the
-    paragraph in which it is first cited, and removes the trailing block of
-    legends.  layout='end' leaves the legends where they are and puts each image
-    above its own legend.  Both are accepted for initial submission.
-    """
-    caps = {n: _caption_index(paras, n) for n in figures}
-    if layout == "end":
-        out = []
-        for i, p in enumerate(paras):
-            n = next((k for k, v in caps.items() if v == i), None)
-            if n is not None:
-                out.append(("image", figures[n]))
-                out.append(("caption", p))
-            else:
-                out.append(("text", p))
-        return out
-    firsts = {n: _first_mention(paras, n) for n in figures}
-    drop = set(v for v in caps.values() if v is not None)
-    heading = next((i for i, p in enumerate(paras)
-                    if p.strip() == "Figures"), None)
-    if heading is not None and all(i > heading for i in drop):
-        drop.add(heading)
-    out = []
-    for i, p in enumerate(paras):
-        if i in drop:
-            continue
-        out.append(("text", p))
-        for n in sorted(figures):
-            if firsts.get(n) == i:
-                out.append(("image", figures[n]))
-                out.append(("caption", paras[caps[n]]))
-    return out
-
-
-def write_docx(paras, path, title_first=True, figures=None, layout="inline"):
-    """Render the manuscript with superscript citations and, optionally, figures."""
-    try:
-        import docx
-        from docx.shared import Pt, Inches
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
-    except ImportError:
-        print("  (python-docx not installed: skipping %s)" % path)
-        return
-    import os
-    d = docx.Document()
-    st = d.styles["Normal"]
-    st.font.name, st.font.size = "Times New Roman", Pt(11)
-    for s in d.sections:
-        s.left_margin = s.right_margin = Inches(1.0)
-        s.top_margin = s.bottom_margin = Inches(1.0)
-    items = ([("text", p) for p in paras] if not figures
-             else plan_layout(paras, figures, layout))
-    n_img = 0
-    for k, (kind, payload) in enumerate(items):
-        if kind == "image":
-            if not os.path.exists(payload):
-                print("  (missing %s: legend kept, image omitted)" % payload)
-                continue
-            p = d.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p.paragraph_format.space_before = Pt(10)
-            p.paragraph_format.space_after = Pt(4)
-            p.paragraph_format.line_spacing = 1.0
-            p.add_run().add_picture(payload, width=Inches(6.4))
-            n_img += 1
-            continue
-        p = d.add_paragraph()
-        if kind == "caption":
-            p.paragraph_format.space_after = Pt(12)
-            p.paragraph_format.line_spacing = 1.0
-        else:
-            p.paragraph_format.space_after = Pt(6)
-            p.paragraph_format.line_spacing = 2.0
-        for chunk, sup in paragraph_runs(payload):
-            r = p.add_run(chunk)
-            r.font.superscript = bool(sup)
-            if kind == "caption":
-                r.font.size = Pt(9)
-            if k == 0 and title_first:
-                r.font.size = Pt(14)
-                r.bold = True
-    d.save(path)
-    print("  wrote %s (%d paragraphs, %d figures)"
-          % (path, sum(1 for k, _ in items if k != "image"), n_img))
-
-MAIN_PARAS = [
-"Two separable axes of intervention in a dependency-ordered recovery geometry",
-"Hiroki Saito1,2*, M.D., Ph.D.",
-"1Onda-daini Hospital, Matsudo-shi, Chiba, Japan",
-"2Department of Neuropsychiatry, Graduate School of Medicine, Nippon Medical School, Sendagi 1-1-5, Bunkyo-ku, Tokyo 113-8602, Japan",
-"* Corresponding author: Hiroki Saito",
-"Department of Neuropsychiatry, Graduate School of Medicine, Nippon Medical School, Sendagi 1-1-5, Bunkyo-ku, Tokyo 113-8602, Japan",
-"E-mail: hiroki.saito.neuro@gmail.com",
-"Phone: +81-3-3822-2131; Fax: +81-3-5814-6287",
-"ORCID: 0000-0002-4964-8559",
-"Abstract",
-"Catatonia recovers through capacities returning in a fixed dependency order, and benzodiazepines and electroconvulsive therapy work without a known target. On an evidence-coupled bistable cascade over that order we take three quantities to be externally accessible: the root capacity, the coupling between capacities, and accumulated evidence. Here we show that evidence has no external port and the other two act on disjoint regions. While every capacity is below threshold, a maximum principle forbids non-negative diffusive coupling, on any graph and either direction, from crossing the switching surface, so acute conversion needs an excursion, whereas an additive excitatory drive converts on its own. Above one exact criterion, the prevailing threshold squared over four, propagation separates into immediate, metastable and confined. On the modelled branch coupling alone shifts the resting first stage, so a treatment effective in both states is predicted to have separable excursion and coupling components, identifiable in model coordinates.",
-"Introduction",
-"Recovery from catatonia proceeds through five precision domains in a fixed order, which held without inversion in twenty-five consecutive inpatients managed without electroconvulsive therapy (ECT)1. That order is the unique linear extension of a dependency chain derived from structural identifiability2, the admissible orders of an acyclic dependency graph being its linear extensions3. An evidence-coupled bistable cascade on such a chain becomes a recovery geometry with two stable configurations, an exactly invariant switching surface and, at weak coupling, a stable partial state4, the four faster domains entering as capacities and the slowest as the evidence coordinate4. Existing accounts of catatonia are cast in terms of top-down modulation and network dysfunction5,6; this one is about recovery order, and asks what an intervention can do.",
-"The question is sharply constrained once the intervention architecture is fixed. We take three quantities to be externally accessible: the capacity state, through an excursion applied to the root; the coupling between adjacent capacities; and the evidence coordinate. That choice is a modelling assumption, not a theorem, since the threshold parameters could be moved as well, and we return to it below.",
-"Catatonia supplies the case in which the question is not academic. Benzodiazepines and ECT are the cornerstones of management, ECT the established escalation when benzodiazepines fail7. Reported response to ECT lies between 59% and 100% across series, is preserved in benzodiazepine non-responders, and often follows one or a few treatments8-11, while chronic partial states respond poorly9. Efficacy is established; the target is not.",
-"While every capacity is below threshold, a maximum principle forbids any non-negative diffusive coupling from producing a crossing, whatever the graph and in either direction, and that is the configuration in which acute treatment is most decisive. The word diffusive carries the argument: coupling entering as an additive excitatory drive rather than as a difference is not covered, and converts a wholly sub-threshold chain on its own. We keep κ as a phenomenological effective coupling defined by the dynamics, its biological implementation unspecified.",
-"In this work we separate the two remaining axes instead of choosing between them. The confinement result needs no chain structure; the results after the crossing use the forward chain, an assumption about the dynamics rather than a restatement of the dependency order. We show that the crossing is set by the root excursion, that propagation afterwards is set by coupling through one exact criterion, that the two carry opposite temporal signatures, and that the coupling is recoverable from the first stage of the resting profile.",
-"Results",
-"A recovery geometry with three external targets",
-"Four capacities r₀ to r₃ in [0,1] lie along the forward acyclic dependency chain of ref. 2, r₀ the root, and Q in [0,1] is a monotone coordinate on the accumulated Fisher information of a slow environmental model, attaining 1 only as a compactified limit4. With z = r₀ − a(Q),",
-"dr₀/dt = g(r₀,Q) + u(t),    drₖ/dt = g(rₖ,Q) + κ (rₖ₋₁ − rₖ),  k = 1,2,3,",
-"dQ/dt = ε [ χ₊(z) C(r) (1 − Q) − ρ χ₋(z) Q ],",
-"with g(r,Q) = r(1 − r)(r − a(Q)), C(r) = ∏ⱼ rⱼ and a(Q) = a₀ − (a₀ − a₁)Qᵖ, p > 1; the selectors χ₊ and χ₋ are non-negative, vanish on z ≤ 0 and z ≥ 0 respectively, and are locally Lipschitz. Four properties used below are proved in Supplementary Note 1: stability of both corners, exact invariance of S = {r₀ = a(Q)} at a position independent of the evidence timescale, forward invariance of each side of it, and a bound K* above which every trajectory off S reaches a corner. Numerical values use the unfitted illustrative set of ref. 4, a₀ = 0.60, a₁ = 0.15 and κ = 0.6.",
-"Three quantities carry an external port in this architecture: u, κ and Q (Fig. 1a). Throughout, κ is an effective dynamical coupling between coarse-grained capacities, entering as a difference κ(rₖ₋₁ − rₖ), and not anatomical or statistical connectivity. Which quantities are accessible is a modelling choice: a₀, a₁, p, ε and ρ are parameters too, and lowering a alone carries a sub-threshold chain to recovery with no input and no change of coupling, at a = 0.25 from a start at 0.30 (Supplementary Note 6). We fix u and κ as the intervention coordinates and treat a(Q) as switching geometry rather than a control.",
-"Evidence has no external port",
-"That the evidence coordinate has no input port is a modelling choice, not a derivation. Its only inflow is the joint availability C(r), and identifying Q with the posterior precision of the slow model makes the choice coherent2,4,12: Q accumulates over contexts in which every capacity was simultaneously online, and contexts in which any was offline contribute nothing. The rate of accrual does carry a port, since ε is set by the rate at which contexts arrive4, but that port is provably impotent, because the switching surface is invariant for every ε and ρ4. What is closed is the port, not the quantity: anything bringing capacities online earlier raises C(r), so every route to consolidation runs through the capacity state.",
-"Confinement below threshold is a maximum principle",
-"The strongest statement here does not use the chain at all. Consider the same bistable law on an arbitrary graph with diffusive coupling, drₖ/dt = rₖ(1 − rₖ)(rₖ − a) + Σⱼ wₖⱼ (rⱼ − rₖ) with every weight wₖⱼ ≥ 0, and let M(t) = maxₖ rₖ(t). At an index attaining the maximum every difference rⱼ − rₖ is non-positive, so the coupling term is non-positive there and the upper Dini derivative obeys",
-"D⁺M ≤ M(1 − M)(M − a) < 0    whenever  0 < M < a.",
-"The set {maxₖ rₖ < a} is therefore forward invariant for every topology, every non-negative weight and both directions of coupling, and while 0 < M < a the maximum strictly decreases. The argument is the standard positively-invariant-region estimate for cooperative systems13,14 applied to the sup-norm: redistribution among capacities all below threshold cannot lift any across it, because it cannot raise the largest one. Integrating 400 systems from four graph families, feed-forward chains, symmetric graphs, purely reverse chains and general directed graphs, no trajectory started below a₀ reached the threshold and the maximum never rose (Fig. 1b). Thresholds need not be equal: the invariant set weakens to {maxₖ rₖ < minₖ aₖ}, as 200 graphs with a threshold per node confirmed.",
-"The scope of the statement is its hypothesis, and two counterexamples fix it. The first concerns the configuration: from r = (0.30, 0.90, 0.90, 0.90) the maximum is not below a, and a reverse coupling of 0.10 converts the root. The second concerns its form: the sign argument uses the difference rⱼ − rₖ, so it does not cover coupling entering additively, as an increase in cell-assembly drive would15. Under a non-negative excitatory drive w(1 − rₖ)Σⱼ S(rⱼ), which keeps the state in [0,1], a chain started at 0.30 everywhere with no input converts above w = 0.100 for S(r) = r and above w = 0.060 for a sigmoidal S, whereas the diffusive form never converts it at weights up to 100 (Supplementary Note 6). What is forbidden is diffusive crossing out of a configuration in which nothing is above threshold.",
-"In the forward chain the conclusion is sharper: κ multiplies zero in the root equation, so the root trajectory is exactly independent of κ, confirmed to solver tolerance at κ = 0.6, 3.0 and 30.0. The premise is not symmetry, and not a chain, but only that nothing is yet above threshold.",
-"Two literatures bound the claim. Confinement is a positively-invariant-region argument standard for cooperative systems13,14, and pinning of fronts by discreteness on graphs is known16; propagation failure in discrete bistable chains has been studied since Keener17,18,19. Our criterion is not that one: those concern a front free on both sides, whereas κc = a(Q)²/4 is the discriminant of the clamped problem with the root held at 1, and is exact rather than variational.",
-"The root excursion sets an exact and sharp crossing",
-"External input enters the root alone. The root field has a single interior unstable zero at r₀ = a(Q) and no incoming coupling, which makes its criterion exact. Under a rectangular pulse from the collapsed chain, swept over five durations and four amplitudes at the reference coupling, the outcome was fixed in every cell by the root value at the end of the pulse: the chain converted if and only if r₀(τ) > a₀ (Fig. 1c). Amplitude and duration are not separate levers, mattering only through where they leave the root. The reference coupling is supercritical, and below a₀²/4 the root recovers while the chain does not follow (Supplementary Note 6). Equivalently, an excursion from full recovery is absorbed when Δ < Δc(Q) = 1 − a(Q).",
-"A closed-form criterion for the coupling axis",
-"After a crossing the root sits at its maximum and the profile is maximally unequal, so the coupling term dominates downstream. With r₀ = 1 the first-stage equilibrium condition factorises, and this is the one stage at which it does,",
-"r₁(1 − r₁)(r₁ − a) + κ(1 − r₁) = (1 − r₁)[r₁² − a r₁ + κ] = 0,",
-"so the low first-stage roots are r₁ = [a ± √(a² − 4κ)]/2 and exist only while a² − 4κ ≥ 0. The stable and unstable partners collide at a saddle-node bifurcation20 when the discriminant vanishes, giving an exact critical coupling",
-"κ_{c}(Q) = a(Q)² / 4.",
-"The factorisation is available only because r₀ = 1. Downstream the condition is the cubic rₖ(1 − rₖ)(rₖ − a) + κ(rₖ₋₁ − rₖ) = 0, and repeating the first-stage construction with κ rₖ₋₁ in place of κ leaves the residual κ rₖ(rₖ₋₁ − 1), which vanishes only at rₖ₋₁ = 1. The stage-wise closed form is therefore an approximation from the second stage on, overstating r₂ by 2.0% and r₃ by 4.0% at κ = 0.003 (Fig. 2a, inset). Because 0 < rₖ₋₁ < a the cubic changes sign on (0,a), so the exact low root is bracketed and obtained to machine precision; the first stage and κc are unaffected.",
-"At consolidated evidence κc = a₁²/4 = 0.0056, and the branch exists at κ = 0.005625 and is absent at 0.00563 (Fig. 2a). At depleted evidence κc = a₀²/4 = 0.090, and the coupling at which a crossing propagates to the distal capacity was located at 0.0900005 (Fig. 1d), against the factor-of-three conservative bound K* ≈ 0.291 of ref. 4. The same construction at r₀ = 0 gives the sharp criterion for whole-chain collapse, (1 − a(Q))²/4, so at depleted evidence collapse propagates above 0.040 where recovery needs 0.090 (Supplementary Note 7). And κc moves with the threshold, falling by (a₀/a₁)² = 16 between a depleted and a consolidated system.",
-"Equal coupling is not needed. If the first stage loses its low root its capacity tends to one, and a comparison argument carries the second across in finite time whenever κ₂ exceeds a(Q)²/4, which reproduces the hypothesis for the third: recovery passes every stage whose coupling exceeds a(Q)²/4 and stops at the first that does not, so the sharp quantity is minₖ κₖ. Bisecting each coupling with the others held strong returned 0.0900000 at every stage, and the arrest depth was the first subcritical stage throughout (Fig. 3a). Existence of the branch is different: for k ≥ 2 a low root exists whatever κₖ is, so only κ₁ can annihilate it, and κc is unchanged by the downstream couplings and by length (Supplementary Note 4).",
-"Three coupling regimes, one of them metastable",
-"Because κc moves with a(Q), the coupling axis has three regimes rather than two (Fig. 2b). For κ > a₀²/4 a crossing propagates at once. For κ < a₁²/4 the branch survives at every attainable evidence level. Between the two the system stalls after the crossing and then completes spontaneously: residual availability is small but not zero, so Q creeps upward, a(Q) falls, and the branch is annihilated when a(Q) drops below 2√κ. Inverting the threshold gives the evidence level at which that happens, the annihilation locus",
-"Q∗(κ) = [ (a₀ − 2√κ) / (a₀ − a₁) ]1/p,",
-"which lies in (0,1) exactly on the intermediate band, tending to 1 as κ approaches a₁²/4 from above and to zero at a₀²/4. What the trajectory does next is: escape, detected on a different function, followed the predicted fold by 0.003% of the annihilation time at κ = 0.05 and 0.11% at κ = 0.08, and by 0.002% with the wide selector. Below the band nothing moved within 5 × 1010 time units.",
-"While the root is recovered the evidence coordinate increases monotonically and the residual availability is bounded below, so the locus is reached in finite time for every κ above a₁²/4, where the partial configuration is an equilibrium of the capacity subsystem alone and metastable in the full system. For κ < a₁²/4 the branch is never removed and the trajectory follows it as Q rises, ending in a partial attractor at Q = 1, the first stage creeping from 0.0050 to 0.0238 at κ = 0.003. Nor is that profile firmly held: the barrier the first stage must clear is 1.7 × 10−4, and additive noise of standard deviation 0.008, under one per cent of the capacity range, took about 470 of 500 paths off the branch within 2 × 104 time units, while 0.002 took none (Fig. 3b). Confinement is a statement about the deterministic field, and the regimes read better as an ordering of timescales than as three fates.",
-"The band is stage-wise as well. Each stage carries its own locus Q∗(κₖ), but none can cross before its predecessor, so stage k completes when the evidence level first exceeds the running maximum of Q∗ up to k. Over five coupling vectors the fifteen completions all sat above that maximum, by 0 to 0.041, in chain order, and the intervals between them were compressed, 0.004% to 9% of the preceding wait, because a stage coming online raises C(r) and accelerates Q.",
-"The absolute waiting time inherits the evidence rate and the regularisation of ref. 4, differing by 380 between the selector scales, and is not a prediction here (Supplementary Note 3), whereas the band, its boundaries and the locus are.",
-"Intermittent coupling acts as a duty-weighted average",
-"Any repeated treatment raises a parameter for a fraction of the time rather than holding it. The field is linear in κ, so the averaged field is exactly the field at the duty-weighted mean and the criterion is expected rather than discovered21, though the trajectory error is of the order of the modulation period. Modulating κ as a rectangular wave with duty fraction f from the partial branch, escape occurred when the duty-weighted mean exceeded κc and not otherwise, in 40 of 42 cells (Fig. 4a); the two exceptions had f = 0.05 and an elevated coupling at least fourteen times κc, where the low phase is long enough to relax back. Sweeping the period at a fixed mean of 1.2 κc, the modulated escape time tracked the average to within 1% below a hundredth of the static escape time, then fell to a sixth of it once the period reached that time (Fig. 4b). The criterion therefore holds only where deliveries are frequent compared with the escape they produce.",
-"Escape from the partial state is slow and stepwise",
-"Why that exponent is one half can be read off the branch. On a forward chain the frozen capacity Jacobian is lower triangular, so its spectrum is its diagonal, and at the first stage, with κ = a r₁ − r₁², it collapses exactly to",
-"λ₁ = − √(a² − 4κ) (1 − r₁),",
-"confirmed numerically to 10−16. Every eigenvalue is negative wherever the branch exists, so the partial configuration is stable at every point of it and the branch is normally hyperbolic away from the fold, where the trajectory tracks it to first order in ε22. The rate that vanishes at the fold is the square root of the same discriminant that fixes κc, and vanishes nowhere else (Fig. 3c; Supplementary Note 5).",
-"Above κc the escape time diverges as a power of the excess, and the exponent is one half. Extending the excess down to 10−5, the local slope of log escape time against log excess falls monotonically from about 0.65 at an excess of 0.8 to 0.501 at the smallest examined (Fig. 4c); a single regression returns 0.529 over that range and 0.509 below 5% excess, both reporting curvature rather than the asymptote. The full system gives 0.48 to 0.57, and 0.39 to 0.53 below 5%.",
-"One control separates the two effects in that spread. With the evidence rate set to zero the six threshold levels collapse, the fit below 5% excess lying between 0.527 and 0.532 (Supplementary Note 2), so curvature is intrinsic to the fold and the spread is not: at ε = 0.02 the fit falls to 0.386 at Q0 = 0.5, because the threshold moves while the system waits.",
-"The shape of the trajectory matters more than the exponent. At an excess of 5% the first two downstream capacities crossed their own unstable roots at 0.31 and 0.65 of the escape interval and reached 0.9 within 3.3% of it, so each spends most of the interval below its own threshold and crosses quickly (Fig. 4d). The result is a staircase, and this is the sharpest observable difference between the axes: a root-driven crossing is fast, sharp and complete, a coupling-driven escape slow and stepwise.",
-"Neither axis requires maintenance after the crossing",
-"At the recovered configuration adjacent differences vanish and the coupling term contributes nothing, so it is asymptotically stable for every non-negative coupling including zero. A system carried past it by either axis stays recovered when both return to their previous values, so durability after a course is not evidence of lasting change. What changes with sustained occupancy is Q, lowering the threshold from 0.60 towards 0.15 and widening Δc(Q) from 0.40 to 0.85. Relapse is then a re-crossing of the same surface at low consolidated evidence, not decay of a treatment effect.",
-"Identifying coupling and threshold from the profile",
-"The obstacle to testing this is that coupling has never been measured, and inferring it from failure to respond is circular. The first stage breaks the circle: its equilibrium condition factorises exactly, so the coupling follows from the first-stage ratio and the threshold,",
-"κ = a r₁ − r₁²,    with  a = 1 − Δ_{c},",
-"with Δc(Q) the largest downward excursion from full recovery absorbed at that evidence level. On the exact equilibrium this returns the coupling to machine precision, with error first order in the error of r₁. Eliminating κ between the first two stages instead gives a = (r₁³ − r₂²)/(r₁² − r₂), exact only on the closed form from which it is derived, biased by −9.4% in the threshold and −11.2% in the coupling at κ = 0.003 before any noise is added, and ill-conditioned, r₂ being smaller than r₁ by a factor of fifty (Fig. 2c). The first-stage estimator is therefore primary.",
-"This is what makes the two axes distinguishable in practice. An intervention acting only on the capacity state leaves the resting profile of a partial branch unchanged; one acting on coupling moves it, by a calculable amount, without the patient recovering. The estimator uses r₁ itself and not a monotone transform, so it needs an index of the first downstream capacity anchored at zero for complete failure and at one for the fully recovered level in the same patient, and ref. 2 says why no scale supplies it: a cross-sectional reading does not separate the first two downstream capacities, which recovery timing separates. It also needs the threshold prevailing on the branch, a(Q), which an acute challenge does not read, since a graded challenge probes the collapsed configuration and estimates a₀, whereas the branch sits at consolidated evidence, and the two differ fourfold. At κ = 0.003 the estimator returns 2.19 times the true coupling if a = 0.30 is used and 4.56 times it at a₀, against 12% for a 10% error in the correct threshold. The coupling is therefore structurally identifiable and not operationally measurable.",
-"What the geometry does and does not say about ECT",
-"The results above are statements about the model, and their clinical use needs a representation, stated as a hypothesis rather than derived. We take ECT to act as an excursion on the root and, over a course, as an increase of the effective coupling. A single treatment is a large acute exogenous perturbation, so its representation by u is close to direct; the coupling half is a coarse-grained hypothesis about propagation from one capacity to the next, not an identification with synaptic strength.",
-"Under that representation three clinical regularities follow from the geometry rather than requiring separate accommodations: the response to a graded stimulus is all-or-none, the shape of the lorazepam challenge8,9; response after benzodiazepine failure needs only a larger excursion; and conversion can be fast, because beyond the surface the chain converges on the ordinary capacity timescale9,10.",
-"The two axes are two states in which one treatment cannot be doing the same thing, and the geometry turns that into a conditional. If the coarse-grained coupling is diffusive, and if the threshold is not itself altered, then no coupling increase converts a wholly sub-threshold configuration, so an acute conversion requires an excursion-like component. One half of that conditional can be removed: on the dependency graph of ref. 2 the root carries no incoming edge, so no coupling of any form reaches it (Supplementary Note 6). On the modelled partial branch a partial converse holds: the root is already maximal, the excursion axis saturated and the evidence coordinate closed, so a durable change of the resting profile there is a change of coupling.",
-"Within the architecture, three things other than a change of coupling could take a patient off the branch: an input driving a downstream capacity above its own unstable root, noise, which the shallow barrier admits, and spontaneous completion on the band. The resting profile separates all three, since only a change in κ moves the resting first stage and keeps it moved.",
-"Published dose-response data already separate the two axes",
-"The architecture makes a prediction that published data can address without new measurement. The excursion axis sets whether a crossing occurs and the coupling axis how far it propagates, so among patients who respond at all the depth of recovery should not depend on the delivered amplitude. A meta-analysis of benzodiazepine treatment in catatonia collected 53 studies and found no significant dose-response relationship in effect size, reading that null as leaving optimal dosing unclear23. We took from it the 21 studies with at least ten patients reporting both response and remission. Across a tenfold range of highest daily dose, from 2 to 20 mg lorazepam-equivalent, the fraction of responders reaching remission spanned the whole interval from 0.00 to 1.00 and was uncorrelated with dose (slope on log dose −0.14, P = 0.35; Spearman ρ = −0.15, P = 0.50), as was the response rate itself (P = 0.31) (Fig. 5a). That null is not a failure to detect but the expected result, because dose is not the quantity that sets depth.",
-"The same source tabulates BFCRS scores before and after treatment for ten individually reported patients. Their reductions were 0, 17, 23, 81, 85, 100, 100, 100, 100 and 100 per cent, with none between 23 and 81 per cent, an empty interval of 58 percentage points (Fig. 5b). A graded response places about 28 per cent of patients in a 35 to 65 per cent window, so observing none of ten there has P = 0.037. This is suggestive, not decisive: partial responses are the least publishable outcome, and a fivefold suppression would reproduce it (Fig. 5c). Studies reporting partial remission separately11 give a median partial share among responders of 20 per cent, range 8 to 68, compatible with arrest at a subcritical stage but not discriminating alone.",
-"Discussion",
-"Of the three quantities we allow an intervention to move, one has no external port and the other two are not alternatives, each powerless exactly where the other is decisive. The criterion κc = a²/4 carries the rest, exact because the first stage factorises, applied stage by stage, and, read as the discriminant whose square root is the rate vanishing at the fold, it fixes the escape exponent. What is exact and what is not should be kept apart: the first stage, the criterion, the locus, the spectrum and the estimator are exact; the stage-wise closed form downstream is an approximation with residual κ rₖ(rₖ₋₁ − 1), inherited as a bias by the two-ratio inversion. Three statements of ref. 4 are settled here: its unclassified coupling range is classified, its partial branch continues at every downstream coupling, and its prediction that consolidation alone cannot remove the branch holds only below a₁²/4.",
-"We are equally explicit about the clinical bridge. Representing electroconvulsive therapy as an excursion with a coupling component is a hypothesis, asymmetric in its security, and nothing here identifies which physiology realises either axis. One weakness is better named than left implicit: the whole division rests on the coarse-grained coupling being diffusive. The one biological observation appealed to here, an increase in co-firing within cell assemblies under stimulation15, does not settle that in either direction, because a change in co-firing, corrected for firing rate or not, reports the coefficient with which one population acts on another, and such a coefficient occupies the same position in the additive form w and in the diffusive form κ. What separates the two is the sign structure of the sink term, which no reported comparison has tested.",
-"The account is falsifiable in eight places. First, acute conversion should be all-or-none in the excursion coordinate, with no group whose recovery is partial in the amplitude delivered; this is the one prediction the section above already addresses, and it survived, though not decisively. Second, non-response to a smaller excursion and response to a larger should need no patient property beyond amplitude. Third, response kinetics should fall into three classes, fast complete conversion, a stalled state that completes late unaided, and one that does not, with membership predicted by the first-stage ratio through a₁²/4 and a₀²/4. Fourth, within the slow class, frequency and per-session amplitude should be interchangeable between those boundaries. Fifth, on the branch the resting first-stage ratio should be unchanged by an intervention acting on the capacity state and changed by one acting on coupling. Sixth, arrest depth should identify the weak stage, and late completions should arrive in bursts rather than evenly, which the milestone latencies already reported can be re-analysed to test1. Seventh, relapse risk should track occupancy of the recovered configuration rather than the number of treatments. Eighth, the two coupling forms are separated by a sign test rather than by a magnitude: hold two populations at equal activity and ask whether the drive between them vanishes, then lower one and ask whether it reverses. A diffusive coupling does both, an additive drive neither at any weight, and existing multi-electrode recordings suffice.",
-"Several limitations qualify these results. The confinement theorem holds for arbitrary graphs and unequal thresholds but only for diffusive coupling, and everything after the crossing assumes a forward chain, though κc and the branch are unchanged from one stage to twelve. Which quantities are externally accessible is an assumption. The identification needs both an anchored index of the first downstream capacity and the threshold prevailing on the branch, no published measure supplies either, and the two state identifications are assumed. The empirical section is a secondary analysis of published aggregate data: the depth comparison is between studies rather than within them, so it carries the usual ecological caveat and is confounded by chronicity, by underlying diagnosis and by the timing of assessment, while the case-level comparison rests on ten patients from case series and is bounded rather than established by its publication-bias sensitivity. The dependency order rests empirically on a single unblinded series1, and the proportional recovery rule in stroke warns that apparent ordering can arise from ceiling effects and mathematical coupling24; milestone timing in that series did not track peak severity, the rank correlations lying between 0.11 and 0.38 with none significant1. The boundaries 0.60, 0.090 and 0.0056 inherit the illustrative set of ref. 4, model time is not clinical time, and the waiting time moves by 380 with the regularisation, so timing statements are orderings.",
-"Conclusion",
-"Of the three quantities an intervention is allowed to move here, evidence has no external port and the other two act on disjoint regions, so a treatment used both acutely and in the chronic partial state cannot be doing the same thing in each. Electroconvulsive therapy is the case in point. Acutely it is predicted to act as an excursion on the root, u, because no non-negative diffusive coupling carries a wholly sub-threshold configuration across the switching surface, on any graph and in either direction, and because the root of the dependency graph has no incoming edge for any coupling to use. On the chronic partial branch it is predicted to act as an increase of the effective coupling, κ, because there the root is already maximal, the excursion axis saturated and the evidence coordinate closed. Between the two, one exact criterion, a(Q)²/4, applied stage by stage, sets how far recovery reaches and when each stage completes, and gives the spectrum and the square-root escape law. Both halves of the prediction are conditional on the coupling form and on identifying the two presentations with the two configurations, neither shown here, and the resting first-stage ratio is what would decide them. Published data are so far consistent with both: the depth of recovery is uncorrelated with dose, and the acute response is all-or-none in the patients for whom it can be read.",
-"Methods",
-"Model and reduction",
-"The system is that of ref. 4, with equal coupling across stages except where stated. The root obeys a bistable law plus an external excursion and each downstream capacity obeys the same law plus a diffusive term proportional to the difference from its immediate predecessor. The bistable law is a cubic with stable states at zero and one and an unstable threshold decreasing convexly with the evidence coordinate from a₀ at no evidence to a₁ at full evidence. Except where stated, analyses were run on the capacity subsystem with the threshold held at a fixed value: this is exact on the partial branch, where the joint availability that drives the evidence coordinate is of order 10−10, and conservative from a collapsed state, where the root lies below threshold and the evidence channel only attenuates. The full five-dimensional system was used for the intermediate-regime integration and for the confirmatory exponent measurement, with the illustrative parameters of ref. 4 throughout: a₀ = 0.60, a₁ = 0.15, p = 2, ε = 0.02, ρ = 1 and the one-sided regularisation χ±(z) = exp(−s/z²) on its own half-line, run at both scales used there, s = 0.01 and s = 1. Integration used an adaptive stiff solver with relative tolerance 10−10 and absolute tolerance 10−13, with event detection for crossings.",
-"Confinement below threshold",
-"One hundred systems were drawn from each of four graph families, feed-forward chains, symmetric graphs, purely reverse chains and general directed graphs, on three to six nodes, with weights drawn from a mixture placing mass at zero, 0.5, 3 and 30 times a uniform draw on (0,1]. The same mixture was used for every family, restricted to the sub-diagonal for feed-forward chains, symmetrised for symmetric graphs and transposed into the strict upper triangle for purely reverse chains, so no family was given a narrower weight distribution than another. Every capacity was initialised below a₀ and the system integrated with no external input; recorded quantities were whether any capacity reached the threshold and the largest increase of maxₖ rₖ over its initial value. Separately, in the forward chain, root trajectories from the same sub-threshold initial condition were computed at κ = 0.6, 3.0 and 30.0 on a common dense grid and compared pointwise rather than at the endpoint. The reverse-coupling counterexample used a bidirectional chain from r = (0.30, 0.90, 0.90, 0.90), at forward weight 0.01 with reverse weight 0.10 and with reverse coupling alone. A further 200 general directed graphs were drawn with a threshold per node from the uniform distribution on [a₁,a₀] and every capacity initialised below the smallest of them, which is the hypothesis the heterogeneous form of the principle needs. The scope experiments of Supplementary Note 6 used the same four-capacity system started at 0.30 everywhere with no external input: an additive form drₖ/dt = rₖ(1 − rₖ)(rₖ − a) + w(1 − rₖ)Σj≠k S(rⱼ) on the complete graph with S(r) = r and with S sigmoidal of midpoint 0.30 and width 0.05, the critical weight bracketed by bisection on the final maximum; the same start under diffusive coupling at weights 0.1, 1, 10 and 100; the same start under the reference coupling at thresholds a = 0.60, 0.40, 0.30 and 0.25; and a root placed at 0.61 with the rest at zero, integrated to 3 × 10⁴ at couplings from 0.6 to 0.01. The graph-restriction experiment of Supplementary Note 6 repeated the additive runs with the drive confined to the forward chain derived in ref. 2, so that capacity k receives only from k − 1 and the root receives nothing, from the same start and from the fully collapsed corner, at weights from 0.01 to 100 and with both forms of S, bracketing the weight at which each stage converts. The collapse criterion of Supplementary Note 7 was obtained by holding the root at zero and bisecting the coupling at which the first stage loses its high equilibrium, at both threshold levels.",
-"Root pulse and excursion sweep",
-"Pulses were applied as u(t) = A on [0,τ] and zero afterwards, from the collapsed chain at Q = 0, at durations τ = 0.25, 0.5, 1, 2 and 5. For each duration the critical amplitude was bracketed by bisection, and outcomes recorded at 0.8, 0.99, 1.01 and 1.2 times it together with the root value reached at the end of the pulse. A separate sweep set the root directly to a value v with no input, over a grid spanning a₀ and refined near it; v = a₀ lies on the invariant surface and was excluded from the grid rather than integrated, since the outcome there is neither corner. The transition was located by bracketed root-finding at three coupling values; the located boundary agrees with a₀ to twelve digits, which is a check on the solver.",
-"Partial branch, critical coupling, identification",
-"The first stage was taken from the factorised quadratic, which is exact. Each downstream stage was obtained as the low root of its cubic, bracketed on (0,a) because the cubic is positive at 0 and negative at a whenever 0 < rₖ₋₁ < a, and solved to machine precision; the residual of the vector field at that profile was below 10−18, and a perturbation of 10−4 in every downstream capacity returned to it. The stage-wise closed form was retained only to quantify its departure, reported as a relative error against the exact profile and against the analytic residual κ rₖ(rₖ₋₁ − 1). The propagation boundary was located by bracketed root-finding on the coupling at which a supracritical excursion reaches the distal capacity. In the full system the fold was located as a separate non-terminal event at a(Q)² − 4κ = 0; because that event function is the discriminant from which the locus is derived, the agreement it reports is a check on the solver rather than a test of the formula, and the independent comparison is with the escape event, detected on r₃ − a(Q) = 0. Identification was evaluated on the exact equilibrium, for the first-stage estimator and for the two-ratio inversion, without noise and then under multiplicative lognormal noise of coefficient of variation 1%, 5% and 10%, two thousand draws per level, reporting medians and interquartile ranges.",
-"Unequal coupling, spectrum and noise",
-"For unequal coupling each stage was given its own κₖ, and the boundary of a single stage was bracketed by bisection on that stage with the others held at 1.0, from the same supracritical excursion used for the equal-coupling boundary. The constants of the comparison lemma of Supplementary Note 4 were evaluated on a grid of 20001 points on [0,0.9] and the bound on the crossing time checked against the integrated comparison equation at four couplings above a₀²/4. Arrest depth was read from seven coupling vectors as the number of downstream capacities above 0.5 at the end of the integration, and compared with the index of the first stage whose coupling does not exceed a(Q)²/4. Existence of the branch was tested at κ₁ = 0.005625 and 0.00563 with downstream couplings spanning 10−4 to 30, and the critical coupling was located by bisection to 10−14 at chain lengths from one stage to twelve. The spectrum was taken as the diagonal of the capacity Jacobian, which is lower triangular on a forward chain, evaluated on the exact branch at three thresholds and ten couplings per threshold and compared with the closed form. For the noise runs the capacity block was integrated by Euler-Maruyama with additive Wiener increments of standard deviation σ on each capacity, step 0.05, the root held at 1, 500 paths per σ and a horizon of 2 × 104; escape was the first stage crossing its own unstable root, and the barrier was computed from the potential of the first-stage field.",
-"Intermittent modulation and period sensitivity",
-"The coupling was modulated as a rectangular wave between a base value of 0.003 and an elevated value, with duty fraction f, starting from the exact partial branch. Escape was scored as the most distal capacity crossing the unstable root of its own bistable law. For the criterion grid the period was one fiftieth of the static escape time at a duty-weighted mean of 1.2 κc. For the period sweep the duty fraction and elevated value were fixed so that the duty-weighted mean equalled 1.2 κc, and the period was varied from 10−3 to 5 times that static escape time; runs in which the escape completed inside the first elevated phase were flagged, since the ratio saturates there and successive points are not independent.",
-"Escape-time scaling",
-"Escape times were recorded at excesses from 10−5 to 0.8 above the critical coupling. The local slope was computed between consecutive excesses, and regressions were also taken over the full range and restricted to excesses below 5%. Reported escape times are for the most distal capacity crossing the unstable root of its own law, which is the definition of the escape time and not the completion of recovery. The measurement was repeated in the full system at Q = 0, 0.5, 0.7, 0.9, 0.99 and 1, in each case starting from the exact partial branch at half the critical coupling for the prevailing threshold, and then repeated again with the evidence rate set to zero and every other setting, including the starting point and the excess grid, left unchanged; that control isolates the contribution of evidence feedback, and it was extended to an excess of 2 × 10−4 at Q = 0 and Q = 0.5 to locate the asymptote. The fraction of the escape interval showing no appreciable change was computed at rate thresholds from 0.5% to 20% of the maximum rate and is reported as a range rather than a single value.",
-"Secondary analysis of published aggregate data",
-"Study-level and case-level values were transcribed from Tables 1 and 2 of ref. 23 and from Tables 1 and 2 of ref. 11. No individual patient records were accessed and no new data were collected. Depth of recovery is the ratio of the remission rate to the response rate in those studies reporting both with at least ten patients; ref. 23 defines remission as no longer meeting criteria, a BFCRS score below 3, and response as any reduction of symptoms, so the ratio is the fraction of responders reaching remission. Dose is the highest daily lorazepam-equivalent dose as tabulated there. The rows of Table 2 of ref. 23 with a sample size of one are individually reported patients, and their per cent reduction was computed from the tabulated scores before and after treatment. The partial window was fixed at 35 to 65 per cent, and the graded comparison value of 28 per cent, the share a monotone dose-response with the same mean curve places in that window, was fixed before the values were read. Association with dose was tested by least-squares regression on log dose and by Spearman rank correlation, and the count in the partial window by an exact binomial test. The publication-bias sensitivity varies the rate at which partial cases enter the literature relative to others and reports the probability of the observed count.",
-"Ethics and reporting",
-"This is a theoretical and numerical study. No human participants, animals, tissue or clinical records were involved and no ethics oversight was required. Clinical quantities cited in the text are taken from the published literature and are used to state what a model must reproduce, not as data analysed here.",
-"Use of generative artificial intelligence",
-"A large language model (Claude, Anthropic) was used during manuscript preparation to assist with language editing, identification of potential logical gaps, and code review. All mathematical arguments, proofs, numerical results and final wording were independently checked and approved by the author. The model was not used as an author and bears no responsibility for the work.",
-"Supplementary information",
-"Supplementary Note 1 restates, with proofs, the four properties of the underlying geometry used here: asymptotic stability of the recovered configuration for every non-negative coupling, asymptotic stability of the failed configuration for positive attenuation, exact invariance of the switching surface S = {r₀ = a(Q)} with forward invariance of z > 0 and z < 0, and the sufficient bound K* above which every trajectory off S reaches a corner. It is provided so that the present results can be checked without recourse to ref. 4, and it also records the analytic residual of the stage-wise closed form. Supplementary Note 2 reports the zero-evidence-rate control for the escape exponent, Supplementary Note 3 reconciles the two statements about joint availability on the partial branch, and Supplementary Notes 4 and 5 prove the two facts used for unequal coupling and the spectrum on the branch. Supplementary Note 6 gives the experiments that delimit the confinement statement: additive excitatory coupling, the restriction of that coupling to the derived dependency graph, lowering of the threshold, and propagation below a₀²/4. Supplementary Note 7 derives the collapse criterion, the dual of κᴄ obtained with the root at zero.",
-"Data availability",
-"No patient data were used in this study. All quantities computed here are generated by the deposited code from the parameter set specified in Methods. The study-level and case-level values analysed in Fig. 5 are transcribed from the published tables of refs. 11 and 23 and are carried in that code. Source data for Figs. 1 to 5 are provided with the paper as a single workbook with one sheet per panel, written by the same script that draws the figures.",
-"Code availability",
-"Code reproducing every reported value and every figure is provided as a single self-contained script that also re-checks each reported number against the recomputed one. It covers the confinement sweeps over the four graph families and over heterogeneous thresholds, the reverse-coupling counterexample, the rectangular-pulse and excursion grids, the exact partial branch and its identification, the unequal-coupling and chain-length sweeps, the spectrum on the branch, the intermittent-modulation grid and period sweep, the escape-time scaling with its zero-evidence-rate control, the noise runs, the scope experiments of Supplementary Note 6, the collapse criterion of Supplementary Note 7, and the secondary analysis of published aggregate data. Running it end to end writes the results file, the five figures, the source-data workbook, the manuscript and the Supplementary Information, and an audit of the text against the requirements of this journal. It is available at https://github.com/entrance4-png/catatonia-two-axes and archived at Zenodo under the concept DOI 10.5281/zenodo.21880298, which resolves to the latest version25, alongside the code accompanying the model on which this work builds4.",
-"References",
-"1. Saito, H. et al. Recovery from catatonia follows a hierarchical precision order. Preprint at medRxiv https://doi.org/10.1101/[medRxiv DOI to be inserted at submission] (2026).",
-"2. Saito, H. The Saito Loop, a computational theory of hierarchical recovery in catatonia. Preprint at PsyArXiv https://osf.io/preprints/psyarxiv/de6bu (2026).",
-"3. Saito, H. Recovery order in adaptive systems is set by dependency structure. Preprint at PsyArXiv https://osf.io/preprints/psyarxiv/8ae7w (2026).",
-"4. Saito, H. Evidence-coupled bistability converts dependency structure into a recovery geometry. Preprint at Research Square https://doi.org/10.21203/rs.3.rs-10620384/v1 (2026).",
-"5. Northoff, G. What catatonia can tell us about top-down modulation: a neuropsychiatric hypothesis. Behav. Brain Sci. 25, 555–577 (2002).",
-"6. Hirjak, D. et al. Catatonia. Nat. Rev. Dis. Primers 10, 49 (2024).",
-"7. Rogers, J. P. et al. Evidence-based consensus guidelines for the management of catatonia: recommendations from the British Association for Psychopharmacology. J. Psychopharmacol. 37, 327–369 (2023).",
-"8. Bush, G., Fink, M., Petrides, G., Dowling, F. & Francis, A. Catatonia. II. Treatment with lorazepam and electroconvulsive therapy. Acta Psychiatr. Scand. 93, 137–143 (1996).",
-"9. Sienaert, P., Dhossche, D. M., Vancampfort, D., De Hert, M. & Gazdag, G. A clinical review of the treatment of catatonia. Front. Psychiatry 5, 181 (2014).",
-"10. Lloyd, J. R., Silverman, E. R., Kugler, J. L. & Cooper, J. J. Electroconvulsive therapy for patients with catatonia: current perspectives. Neuropsychiatr. Dis. Treat. 16, 2191–2208 (2020).",
-"11. Pelzer, A. C. M., van der Heijden, F. M. M. A. & den Boer, E. Systematic review of catatonia treatment. Neuropsychiatr. Dis. Treat. 14, 317–326 (2018).",
-"12. Friston, K., FitzGerald, T., Rigoli, F., Schwartenbeck, P. & Pezzulo, G. Active inference: a process theory. Neural Comput. 29, 1–49 (2017).",
-"13. Chueh, K. N., Conley, C. C. & Smoller, J. A. Positively invariant regions for systems of nonlinear diffusion equations. Indiana Univ. Math. J. 26, 373–392 (1977).",
-"14. Smith, H. L. Monotone Dynamical Systems: An Introduction to the Theory of Competitive and Cooperative Systems (American Mathematical Society, 1995).",
-"15. Moore, H. et al. Stimulation modulates gene-linked cell assemblies in the human brain. Nature https://doi.org/10.1038/s41586-026-10879-9 (2026).",
-"16. Kouvaris, N. E., Kori, H. & Mikhailov, A. S. Traveling and pinned fronts in bistable reaction-diffusion systems on networks. PLoS ONE 7, e45029 (2012).",
-"17. Keener, J. P. Propagation and its failure in coupled systems of discrete excitable cells. SIAM J. Appl. Math. 47, 556–572 (1987).",
-"18. Mallet-Paret, J. The global structure of traveling waves in spatially discrete dynamical systems. J. Dyn. Differ. Equ. 11, 49–127 (1999).",
-"19. Elmer, C. E. & Van Vleck, E. S. Spatially discrete FitzHugh-Nagumo equations. SIAM J. Appl. Math. 65, 1153–1174 (2005).",
-"20. Strogatz, S. H. Nonlinear Dynamics and Chaos 2nd edn (Westview, 2015).",
-"21. Sanders, J. A., Verhulst, F. & Murdock, J. Averaging Methods in Nonlinear Dynamical Systems 2nd edn (Springer, 2007).",
-"22. Fenichel, N. Geometric singular perturbation theory for ordinary differential equations. J. Differ. Equ. 31, 53–98 (1979).",
-"23. Bot, L. et al. The effect of benzodiazepines on catatonia: a systematic review and meta-analysis. Acta Psychiatr. Scand. 154, 99–115 (2026).",
-"24. Hope, T. M. H. et al. Recovery after stroke: not so proportional after all? Brain 142, 15–22 (2019).",
-"25. Saito, H. catatonia-two-axes: reproduction code for a dependency-ordered recovery geometry. Zenodo https://doi.org/10.5281/zenodo.21880298 (2026).",
-"Acknowledgements",
-"The author thanks colleagues at Onda-daini Hospital, Nippon Medical School and Karolinska Institutet for discussion. No funding was received for this work.",
-"Author contributions",
-"H.S. conceived the study, derived and implemented the model, performed the numerical analysis, and wrote the manuscript.",
-"Competing interests",
-"The author declares no competing interests.",
-"Figures",
-"Fig. 1 | The crossing is set by the root excursion and is independent of coupling. a, The chain. In catatonia r₀ to r₃ are sensory, policy, motivational and fast-volatility precision, and Q is the identifiability of slow-volatility precision2. External input enters the root alone; coupling acts on differences between adjacent capacities and is absent from the root equation. b, The running maximum maxₖ rₖ(t) from a sub-threshold start, one example per graph family. Across 400 systems drawn from the four families no trajectory reached the threshold and the maximum never rose. c, Rectangular pulses u(t) = A on [0,τ] from the collapsed chain, at five durations and four amplitudes each. Outcome is fixed by the root value at the end of the pulse alone: conversion occurs exactly when r₀(τ) > a₀. d, With the same supracritical excursion in every run, the outcome after the crossing is set by coupling, with a sharp boundary at a₀²/4 = 0.090 located at 0.0900005.",
-"Fig. 2 | The partial branch, its removal, and identification from the resting profile. a, Partial branch against coupling at consolidated evidence: exact equilibrium in colour, stage-wise closed form in grey. The two coincide at the first stage and diverge downstream. Inset, relative departure of the closed form from the exact profile: identically zero at r₁, rising to 2.0% at r₂ and 4.0% at r₃ at κ = 0.003 and growing as the coupling falls. The first-stage roots collide at κc = a₁²/4 = 0.0056. b, Because κc = a(Q)²/4 falls as evidence consolidates, the coupling axis has three regimes: immediate propagation above a₀²/4, deterministic confinement to the branch below a₁²/4, and an intermediate band in which the partial state is metastable, stalling and then completing without further intervention. Read against the upper axis the same curve is the annihilation locus Q∗(κ); markers show the three couplings integrated in the full system. c, Recovered coupling on the exact equilibrium. The first-stage estimator is unbiased at zero noise and degrades gracefully; the two-ratio inversion is biased before any noise is added and is ill-conditioned. Points are medians and bars interquartile ranges over two thousand draws per level.",
-"Fig. 3 | The weakest stage sets where recovery stops, and the branch is shallowly held but hyperbolically stable. a, One stage swept while its neighbours stay strong. Recovery stops at the swept stage and nowhere else, and it stops exactly at a₀²/4, so the criterion applies stage by stage and the sharp quantity is the weakest coupling. b, Fraction of 500 noisy paths still on the confined branch at κ = 0.003, where the barrier is 1.7 × 10−4. Additive noise of standard deviation 0.008 empties the well within the horizon; 0.002 does not. c, Decay rates on the branch at consolidated evidence against the distance from the fold. The rate that vanishes at the fold follows the closed form √(a² − 4κ)(1 − r₁) exactly and does so as a square root, a straight line of slope 1/2 here, while the second stage stays fast.",
-"Fig. 4 | Intermittent delivery, the escape exponent, and the stepwise escape. a, Escape from the partial branch under rectangular modulation follows the duty-weighted criterion in 40 of 42 combinations; the exceptions are large amplitude at low duty, where the fast-modulation assumption fails. b, Holding the duty-weighted mean at 1.2 κc, the modulated escape time tracks the averaged prediction for periods below a few per cent of the escape time and then falls below it, so averaging understates efficacy there, the reverse of a. Diamonds mark points at which the escape completes inside the first elevated phase, where the ratio saturates. c, Local slope of log escape time against log excess in the capacity subsystem, converging to 0.501 at the smallest excess examined; the dashed line is 1/2. Inset, exponent fitted below 5% excess in the full system against the prevailing threshold, with the evidence channel on and off. With the channel off the six levels collapse; the depression at ε = 0.02 is therefore evidence feedback and not the approach to the asymptote. d, At an excess of 5% the first two downstream capacities cross at 0.31 and 0.65 of the escape interval and reach 0.9 within 3.3% of it in both cases. The third crosses at 1.00 by construction, since the escape time is defined as that crossing.",
-"Fig. 5 | Published data separate the axes and show an all-or-none acute response. a, Depth of recovery, the fraction of responders reaching remission, against highest daily dose in the 21 studies of ref. 23 with at least ten patients. Point area is proportional to sample size. Depth spans the full interval and is uncorrelated with dose; the line is the least-squares fit on log dose with its 95% band. b, Per cent reduction in BFCRS in the ten individually reported patients of ref. 23. The shaded band is the 35 to 65 per cent window in which a graded response would place about 28 per cent of patients, and it is empty. c, Publication-bias sensitivity: the probability of observing no patient in that window against the rate at which partial cases are published relative to others. A fivefold suppression reproduces the observation, so the case-level result bounds rather than establishes the all-or-none reading."
-]
-
-SUPP_PARAS = [
-"Supplementary Information",
-"Two separable axes of intervention in a dependency-ordered recovery geometry",
-"Hiroki Saito",
-"Supplementary Note 1. Properties of the underlying geometry",
-"The main text uses four properties of the evidence-coupled bistable cascade. They are established in ref. 4 of the main text; they are restated and proved here, in the notation of the main text, so that the results of this paper can be checked without recourse to that work. Throughout, g(r,Q) = r(1 − r)(r − a(Q)), the coupling is non-negative, the root carries no incoming coupling, and the selectors χ₊ and χ₋ are non-negative, locally Lipschitz, and vanish on z ≤ 0 and z ≥ 0 respectively, so in particular χ₊(0) = χ₋(0) = 0.",
-"S1. The recovered configuration is stable for every coupling",
-"At Erec = (1,1,1,1) with any Q, g(1,Q) = 0 and every difference rₖ₋₁ − rₖ vanishes, so Erec is an equilibrium of the capacity block for every κ ≥ 0. Differentiating g gives ∂g/∂r = (1 − 2r)(r − a) + r(1 − r), which at r = 1 equals −(1 − a) < 0 since a < 1. The capacity Jacobian is lower triangular, because stage k receives only from stage k − 1, with diagonal entries −(1 − a) − κₖ, all strictly negative. In the evidence direction the factor 1 − Q multiplies the only positive term, so the linearisation there is −ε χ₊(z) C(r) ≤ 0, strictly negative while z > 0. The configuration is therefore asymptotically stable, and the conclusion does not depend on the value of the coupling, including κ = 0.",
-"S2. The failed configuration is stable when evidence attenuates",
-"At Epath = (0,0,0,0) the same computation gives ∂g/∂r = −a at r = 0, and the capacity Jacobian is again lower triangular with diagonal −a − κₖ < 0. There z = −a(Q) < 0, so χ₋ > 0 and the evidence equation reduces to dQ/dt = −ε ρ χ₋(z) Q, whose linearisation at Q = 0 is −ε ρ χ₋(−a) < 0 for ρ > 0. The failed configuration is then hyperbolically asymptotically stable. At ρ = 0 that eigenvalue vanishes and the set {(0,0,0,0,Q)} is a continuum of equilibria, Lyapunov stable in the capacities but not asymptotically stable in the full system.",
-"S3. The switching surface is exactly invariant",
-"Let S = {r₀ = a(Q)} and z = r₀ − a(Q). On S, and with no external input, g(r₀,Q) = r₀(1 − r₀)(r₀ − a(Q)) = 0, so dr₀/dt = 0. Also z = 0 gives χ₊(z) = χ₋(z) = 0, so dQ/dt = 0. Hence",
-"dz/dt = dr₀/dt − a′(Q) dQ/dt = 0    on S,",
-"for every ε and every ρ. The surface is therefore invariant, and because the field is locally Lipschitz, solutions are unique, so a trajectory in {z > 0} cannot reach {z < 0} without spending time on S, which is impossible. Both regions are forward invariant. The defining relation r₀ = a(Q) contains neither ε nor ρ, so the position of S is independent of the evidence timescale. Two remarks bear on the main text. First, the argument uses χ₊(0) = χ₋(0) = 0; if the selectors were replaced by plain averaging, χ±(0) = 1/2, the surface would move with the evidence timescale. That boundary zero is neither a stipulation nor a knife edge. Ref. 4 obtains it from a two-regime Bayesian model with ambiguity-suspended updating, at every finite sharpness and for every member of the admissible selector class, and proves the converse: within that class the surface is invariant for every ε and ρ if and only if both selectors vanish at z = 0. It also measures the cost of violating it, a boundary value η displacing the surface by O(εη). Second, u(t) enters dr₀/dt directly, so an external input is exactly the term that can carry a trajectory off S, which is the sense in which the crossing belongs to that axis alone.",
-"S4. A sufficient coupling bound for whole-chain convergence",
-"Ref. 4 establishes that if κₖ exceeds K = max over a in [a₁,a₀] of (1 − a + a²)/3 then every trajectory off S converges to a corner, E_{rec} when z(0) > 0 and E_{path} when z(0) < 0. At the illustrative parameters K ≈ 0.291. We quote this result rather than reprove it, and we do not rely on it: the main text uses it only for comparison, since for the specific question of whether a crossing at the root propagates to the distal capacity the sharp boundary is available in closed form and equals a(Q)²/4, which at depleted evidence is 0.090, a factor of three below K. K is sufficient for a stronger statement, convergence from every initial condition, and is correspondingly conservative here.",
-"S5. Residual of the stage-wise closed form",
-"The main text uses the exact first-stage root and solves the downstream stages numerically. For completeness, the residual left by the stage-wise closed form is analytic. Suppose rₖ satisfies rₖ² − a rₖ + κ rₖ₋₁ = 0, that is rₖ(rₖ − a) = −κ rₖ₋₁. Substituting into the true equilibrium condition gives",
-"rₖ(1 − rₖ)(rₖ − a) + κ(rₖ₋₁ − rₖ) = (1 − rₖ)(−κ rₖ₋₁) + κ rₖ₋₁ − κ rₖ = κ rₖ(rₖ₋₁ − 1),",
-"which vanishes only at rₖ₋₁ = 1. The first stage is therefore exact and every later stage is not. At the illustrative parameters and κ = 0.003 the closed form overstates r₂ by 2.0% and r₃ by 4.0%, and the residual it leaves, −1.396 × 10−6 at the second stage, is analytic rather than numerical. Because 0 < rₖ₋₁ < a, the exact cubic rₖ(1 − rₖ)(rₖ − a) + κ(rₖ₋₁ − rₖ) is positive at rₖ = 0 and negative at rₖ = a, so its low root is bracketed and can be obtained to machine precision, which is what the deposited code does.",
-"Supplementary Note 2. Zero-evidence-rate control for the escape-time exponent",
-"The escape time above the critical coupling diverges as a power of the excess with exponent one half, and two separate effects push a fitted exponent away from that value. The first is pre-asymptotic curvature: at any finite excess the fit still contains the approach to the asymptote, so it exceeds one half over a wide range and falls towards one half as the excess is reduced. The second is feedback through the evidence coordinate: while the system waits on the branch, Q rises, a(Q) falls and the critical coupling moves, so the excess against which the fit is taken is not the excess the system experiences. The first effect is present in the capacity subsystem, which has no evidence channel; the second exists only at a positive evidence rate.",
-"The control separates them by a single change. The full five-dimensional sweep is repeated with ε set to zero and everything else, including the six evidence levels, the starting point at half the critical coupling for the prevailing threshold, the excess grid and the solver settings, held fixed. With the evidence channel off the six levels must give one exponent, because the capacity block then depends on the evidence level only through the constant a, and the excess is measured in units of the corresponding κc.",
-"Exponents of the full system with the evidence channel on and off. Each entry is the negative slope of log escape time against log excess, fitted over the whole grid (0.005 to 0.8) and restricted to excesses at or below 0.05. Columns: Q₀, a(Q₀), then full range and small excess at ε = 0.02, then full range and small excess at ε = 0.",
-"Q₀ = 1.00;  a = 0.1500;  ε = 0.02: 0.570, 0.532;  ε = 0: 0.570, 0.532",
-"Q₀ = 0.99;  a = 0.1590;  ε = 0.02: 0.530, 0.456;  ε = 0: 0.570, 0.532",
-"Q₀ = 0.90;  a = 0.2355;  ε = 0.02: 0.501, 0.432;  ε = 0: 0.571, 0.532",
-"Q₀ = 0.70;  a = 0.3795;  ε = 0.02: 0.484, 0.401;  ε = 0: 0.572, 0.531",
-"Q₀ = 0.50;  a = 0.4875;  ε = 0.02: 0.478, 0.386;  ε = 0: 0.574, 0.529",
-"Q₀ = 0.00;  a = 0.6000;  ε = 0.02: 0.516, 0.430;  ε = 0: 0.577, 0.527",
-"The collapse is exact to the third decimal: with the channel off the full-range exponent lies between 0.570 and 0.577 and the small-excess exponent between 0.527 and 0.532, a spread of 0.005 across a threshold range of a factor of four, against a spread of 0.146 in the same column with the channel on. At Q₀ = 1 the two sweeps agree to every digit reported, because z > 0 on the branch makes the only inflow term proportional to 1 − Q, which vanishes there, so the evidence coordinate is stationary and ε cannot act.",
-"Continuing the control to smaller excess confirms that the residual curvature is the asymptote and nothing else. At Q₀ = 0.5 the local slope between consecutive excesses is 0.512 at 3.2 × 10−3, 0.508 at 1.4 × 10−3, 0.505 at 7.1 × 10−4 and 0.504 at 3.2 × 10−4; at Q₀ = 0 the same sequence is 0.510, 0.507, 0.505 and 0.503. Both approach one half from above, at the same rate, at thresholds differing by a factor of 1.23.",
-"One alternative explanation is excluded arithmetically rather than numerically. Every sweep starts on the exact partial branch at κ = κc/2, and the first stage there is r₁ = a(1 − 1/√2)/2, while the branch remnant at κc is r₁ = a/2. The ratio is 1 − 1/√2 = 0.2929 at every threshold, since a cancels. The starting point is therefore the same fraction of the way to the fold at every evidence level and cannot produce a spread across levels.",
-"Supplementary Note 3. The two statements about joint availability",
-"The main text uses the joint availability C(r) = ∏ⱼ rⱼ in two apparently opposite ways: it is treated as negligible when the capacity subsystem is analysed at a frozen threshold, and as the quantity that eventually destroys the partial branch. Both are correct, and they refer to different timescales.",
-"On the partial branch at the illustrative κ = 0.003 the exact profile is r = (1.000, 2.377 × 10−2, 4.676 × 10−4, 9.170 × 10−6), so C(r) = 1.02 × 10−10. The evidence equation gives |dQ/dt| ≤ ε C(r) = 2 × 10−12 while the root is recovered, so over an escape interval of a few hundred time units Q changes by less than 10−9 and a(Q) by less than 10−9. Holding the threshold fixed over such an interval is therefore not an approximation at any digit the main text reports, which is what licenses the frozen reduction used for the branch, the critical coupling, the identification and the modulation results.",
-"The same residual availability is nevertheless bounded away from zero, and Q is monotone while z > 0, so the integral of the rate does not converge: given long enough, Q reaches any level below 1. The relevant level is the annihilation locus Q∗(κ), and the time to reach it is set by ε C(r) and by the selector scale. In the full-system integrations it ranges from 8.8 × 105 time units at κ = 0.08 with the narrow selector to 3.4 × 108 at the same coupling with the wide one, a factor of 380, and to 4.9 × 107 at κ = 0.05 with the narrow selector. Below a₁²/4 the locus does not exist and no waiting time is defined.",
-"The consequence for the main text is a division between what is and is not a prediction. The existence of the intermediate band, its two boundaries a₁²/4 and a₀²/4, the locus Q∗(κ) and the ordering of the fold and the escape follow from the geometry and are reported as results. The absolute waiting time does not: it inherits the evidence rate and the regularisation of ref. 4, and varies by more than two orders of magnitude between the two selector scales used there. No clinical timescale is claimed from it.",
-"Supplementary Note 4. Unequal coupling: the weakest stage",
-"Let each stage carry its own coupling, drₖ/dt = g(rₖ,Q) + κₖ(rₖ₋₁ − rₖ), and hold the threshold fixed at a. Two facts follow, and together they replace the equal-coupling assumption used in the main analyses.",
-"S6. Propagation is decided stage by stage, by the weakest coupling",
-"Suppose the crossing has occurred and r₀ = 1. The first stage sees the equilibrium condition r₁(1 − r₁)(r₁ − a) + κ₁(1 − r₁) = (1 − r₁)[r₁² − a r₁ + κ₁] = 0, whose low roots exist exactly while κ₁ ≤ a²/4, so for κ₁ > a²/4 the first stage has no rest point below a and converges to 1. Stage 2 then faces a predecessor tending to 1 rather than one held at 1, and the step from that limit to a crossing in finite time is the content of the following lemma. Writing it out is what makes the induction a proof rather than a sequence of limits.",
-"S6a. A predecessor tending to one carries a supercritical stage across",
-"Let stage k obey drₖ/dt = rₖ(1 − rₖ)(rₖ − a) + κₖ(s(t) − rₖ) with s(t) → 1, and let κₖ > a²/4. Fix θ with a < θ < 1 and put",
-"μ_{θ} = min_{0 ≤ x ≤ θ} (1 − x)(x² − a x + κₖ).",
-"Because the discriminant a² − 4κₖ is negative, x² − a x + κₖ ≥ κₖ − a²/4 > 0 for every real x, so μθ ≥ (1 − θ)(κₖ − a²/4) > 0. The field is affine and increasing in s with slope κₖ, so for s ≥ 1 − η it is bounded below on [0,θ] by μθ − κₖ η, which is positive for every η < μθ/κₖ. Choose such an η, and choose T with s(t) > 1 − η for all t > T. Then drₖ/dt ≥ μθ − κₖ η > 0 for every t > T at which rₖ ≤ θ, so rₖ leaves [0,θ] no later than",
-"t = T + θ / (μ_{θ} − κₖ η),",
-"which is finite. In particular rₖ crosses a in finite time. Above θ the same comparison against the field at s = 1 − η, whose only zero in (a,1] lies within O(η) of 1, gives rₖ(t) ≥ 1 − O(η) eventually; since η may be taken as small as desired once T is enlarged accordingly, rₖ → 1. Stage k therefore reproduces for stage k + 1 the hypothesis that stage k − 1 supplied for it, and the induction runs down the chain.",
-"The lemma also shows what the margin costs. At κₖ = 0.0901, a margin of 10−4 above a₀²/4 = 0.09, the field on [0,0.9] is bounded below by 7.0 × 10−5 and η must be smaller than 7.8 × 10−4; at κₖ = 0.20 the bound is 4.7 × 10−2 and η may be as large as 0.52. Integrating the comparison equation at η = μθ/2κₖ gave crossing times of 627, 82, 29 and 9.3 at κₖ = 0.0901, 0.095, 0.12 and 0.20, in every case inside the bound above. A predecessor that merely converges, rather than one held at 1, therefore delays the crossing but cannot prevent it.",
-"Conversely, if κₖ < a²/4 the limiting field retains its low root at [a − √(a² − 4κₖ)]/2, the interval below it is forward invariant in the limit, and stage k converges there instead. Recovery therefore passes stage k if and only if κₖ > a²/4 and arrests at the first stage for which it does not, so the chain recovers completely if and only if minₖ κₖ > a²/4: the sharp quantity is the smallest coupling and not the average, and the arrest depth identifies which stage is weak. Numerically, bisecting each coupling separately with the others held at 1.0 returned the same boundary at every stage, 0.090000022 against a₀²/4 = 0.090000000, and the arrest depth matched the index of the first subcritical stage in every coupling vector tested, including vectors whose minimum sits within 0.001 of the boundary.",
-"S6b. The intermediate band is stage-wise, at the running maximum of Q*",
-"The same argument applies while the threshold is still moving. On the intermediate band a stage is held below its own unstable root until a(Q) falls to 2√κₖ, that is until Q reaches Q∗(κₖ). A stage cannot cross before its predecessor, so the level at which stage k completes is not Q∗(κₖ) but the running maximum of Q∗ over stages 1 to k: where a stage's own locus lies below that maximum it is released by its predecessor rather than by its own criterion, and it follows almost at once.",
-"Integrating the full five-dimensional system with a coupling per stage, from the collapsed profile at Q = 0, at the five vectors (0.5, 0.05, 0.02), (0.5, 0.02, 0.05), (0.2, 0.08, 0.03), (0.3, 0.04, 0.07) and (0.5, 0.06, 0.015), all fifteen completions occurred in chain order and at evidence levels above the running maximum, by between 0 and 0.041. The overshoot is positive because Q continues to rise during the finite crossing, and it is larger for the stages released by a predecessor, which are already past their own locus when they go. Delayed completion is therefore not one event but a sequence of them, at levels the coupling vector fixes in advance.",
-"The intervals between consecutive completions are compressed relative to the wait that precedes them, from 0.004% to 9% across the five vectors, because a stage coming online multiplies the joint availability C(r) and accelerates Q. On the evidence coordinate the sequence is a clean staircase; in time it is often a burst. That asymmetry is itself a signature: late completions should not be evenly spaced.",
-"S7. Existence of the branch is decided by the first stage alone",
-"For k ≥ 2 write f(x) = x(1 − x)(x − a) + κₖ(rₖ₋₁ − x) with 0 < rₖ₋₁ < a. Then f(0) = κₖ rₖ₋₁ > 0 and f(a) = −κₖ(a − rₖ₋₁) < 0, so f changes sign on (0,a) and a low root exists for every positive κₖ. No downstream coupling can destroy the branch; only κ₁ can, through the discriminant of the quadratic above.",
-"Two consequences follow. The critical coupling κc = a²/4 is a statement about the first stage and is therefore unchanged by the downstream couplings: the branch was present at κ₁ = 0.005625 and absent at 0.00563 for downstream couplings of 10−4, 0.5, 10 and 30. It is also unchanged by the length of the chain, since adding stages adds only cubics that always have a low root: bisection returned 0.005625000000 at every chain length from one stage to twelve, agreeing to twelve digits. The identification of the coupling from the first stage ratio is untouched by both, because it uses only that stage.",
-"Supplementary Note 5. The spectrum on the branch, and the exponent",
-"On a forward chain, stage k receives only from stage k − 1, so the Jacobian of the capacity block at frozen Q is lower triangular and its spectrum is its diagonal,",
-"λₖ = (1 − 2rₖ)(rₖ − a) + rₖ(1 − rₖ) − κ.",
-"Evaluate this at the first stage of the branch. There r₁ is the low root of r² − a r + κ = 0, so κ = a r₁ − r₁², and substituting gives λ₁ = (1 − 2r₁)(r₁ − a) + r₁(1 − r₁) − a r₁ + r₁² = 2r₁ − a − 2r₁² + a r₁. Writing D = √(a² − 4κ), the low root is r₁ = (a − D)/2, so 2r₁ − a = −D and −2r₁² + a r₁ = r₁(a − 2r₁) = r₁ D. Hence",
-"λ₁ = −D (1 − r₁) = −√(a² − 4κ) (1 − r₁),",
-"an identity, not an approximation. It was checked against the numerically differentiated diagonal at three thresholds and ten couplings per threshold, with a largest discrepancy of 1.1 × 10−16.",
-"Three things follow. First, λ₁ < 0 wherever the branch exists, since D > 0 and r₁ < 1, and the downstream λₖ are the slopes of the cubics at their own low roots and are negative for the same reason, so the partial configuration is stable at every point of the branch and not only at the illustrative coupling. Second, the branch is normally hyperbolic away from the fold, so at a small evidence rate the full trajectory tracks it to first order in ε by the standard geometric singular perturbation estimate (ref. 22 of the main text); what that estimate does not cover is the passage through the fold itself. Third, λ₁ is the eigenvalue that vanishes at the fold, and it does so as the square root of the same discriminant whose vanishing defines κc. On the grid computed here, thirty combinations of threshold and coupling, λ₁ is also the least negative of the three, with a smallest margin of 8.8 × 10−3 against λ₂, but we use only the first statement, which is what the escape-time law requires. The critical coupling is the statement that the discriminant reaches zero; the escape exponent of one half is the statement that it reaches zero linearly in the excess, so that the rate, and hence the reciprocal of the escape time, vanishes as its square root. The two headline results are one expression read twice.",
-"Supplementary Note 6. What the confinement statement does not cover",
-"The maximum principle of the main text has two hypotheses that are easy to read past: the coupling enters as a difference between capacities, and the threshold is not itself an intervention target. Three numerical experiments fix what each hypothesis is doing. All three use the illustrative parameters of ref. 4 and a chain of four capacities, and none of them contradicts the theorem; they delimit it.",
-"S8. Additive excitatory coupling converts a sub-threshold chain on its own",
-"Replace the diffusive term by a non-negative excitatory drive on the complete graph,",
-"drₖ/dt = rₖ(1 − rₖ)(rₖ − a) + w (1 − rₖ) Σ_{j ≠ k} S(rⱼ),   w ≥ 0,  S ≥ 0.",
-"The gate (1 − rₖ) keeps the state in [0,1] and the weights are non-negative, so this is a legitimate excitatory coupling; what it lacks is the difference structure. The sign argument fails immediately: at an index attaining the maximum the drive is still strictly positive, so D⁺M is not bounded above by the uncoupled field and nothing prevents M from rising through a.",
-"It does rise. Started from rₖ = 0.30 for every k, wholly below a₀ = 0.60, with no external input and no change of threshold, the chain converts completely above w = 0.100 for S(r) = r and above w = 0.060 for the sigmoidal S(r) = [1 + exp(−(r − 0.30)/0.05)]−1. Both weights are exact rather than fitted. For S(r) = r the symmetric subspace rₖ ≡ r carries the field r(1 − r)(r − a + 3w), so the additive drive shifts the threshold to a − 3w and the start at 0.30 crosses precisely when 3w > a₀ − 0.30, that is w > 0.100; bisection returned 0.100000000000. For the sigmoidal S the drift at the symmetric start is 0.30 × 0.70 × (0.30 − 0.60) + 3w × 0.70 × S(0.30) = −0.063 + 1.05 w, since S(0.30) = 1/2, and this changes sign at w = 0.060; bisection returned 0.059999999999.",
-"The diffusive control is unambiguous. The same start, the same graph and the same integration with the drive replaced by Σⱼ w (rⱼ − rₖ) leaves the chain at the failed corner at w = 0.1, 1, 10 and 100, three orders of magnitude above the additive threshold and far above any coupling used anywhere else in this work. The theorem is not a statement about coupling strength; it is a statement about coupling form, and no strength defeats it while no capacity is above threshold.",
-"The counterexample is not idle, but neither is it settled by the one biological observation this work has appealed to. An increase in co-firing within cell assemblies under stimulation (ref. 15 of the main text) reports the coefficient with which one population acts on another, and that coefficient occupies the same position in w as it does in κ; whether the measurement is corrected for firing rate changes nothing here, since correcting for rate isolates the coefficient and says nothing about how the term depends on the difference. What separates the two forms is the sign structure of the sink term. The diffusive term vanishes at rₖ₋₁ = rₖ and reverses below it; the additive term is strictly positive whenever the source is, at every weight. No reported comparison holds two populations at equal activity and asks whether the drive between them vanishes, and none lowers one below the other and asks whether it reverses. That is the eighth prediction of the main text, and it is the measurement that would decide the question; existing multi-electrode recordings are sufficient for it. The two forms do make opposite predictions about the acute state, and the first prediction separates them there: under diffusive coupling a wholly sub-threshold chain cannot be converted by coupling at any strength, so an acute conversion requires an excursion, whereas under an additive drive on a graph with an edge into the root a large enough coupling change converts it with no excursion at all. If acute conversion is all-or-none in the delivered amplitude, with no group whose recovery is graded in amplitude, the excursion is doing the work; if response instead grades with the number or intensity of contacts independently of the amplitude reached, the additive reading is favoured. That test uses dose-response data of a kind that already exists.",
-"S8a. On the derived graph the root is unreachable by coupling of any form",
-"The additive experiment above is run on the complete graph, in which every capacity drives every other. The dependency analysis that supplies the chain excludes that topology: non-adjacent pairs retain positive joint Fisher information, so no edge joins them, and the transitive reduction is the chain πs → β → πm → πv_fast → πv_slow (ref. 2 of the main text). Restricting the same drive to that chain, so that capacity k receives only from k − 1 and the root receives nothing, changes the outcome at the root and only there. From rₖ = 0.30 everywhere with no external input the most distal stage converts above w = 0.376518 and the first downstream stage above w = 0.979380, while the root converts at no weight tested up to 100, the terminal state being (0, 1, 1, 1); with the sigmoidal S the same holds, and from the fully collapsed corner at w = 100 the terminal state is again (0, 1, 1, 1). That state has C(r) = 0, so the evidence coordinate never accumulates and the threshold never falls, and it is not a recovered configuration on any reading.",
-"The reason is structural rather than numerical, and it does not depend on the weights or on the form of S. The root carries no incoming edge, so every coupling term in its equation multiplies nothing, whatever that term is; only u enters there. The confinement theorem is a statement about the whole chain and it does need the diffusive form. The clinical half of the conditional does not: on the graph the dependency analysis supplies, no coupling change of any form converts the root, so an acute conversion still requires an excursion. What the additive counterexample establishes is that a coupling change can convert the chain below the root, and that it can convert the root as well once the root is given incoming edges that the identifiability analysis does not exhibit.",
-"S9. Lowering the threshold converts the chain with no input and no coupling change",
-"The main text takes three quantities to be externally accessible. That list is a modelling assumption, and the threshold parameters show what it excludes. Holding the coupling at the reference value 0.6 and supplying no input at all, a chain started at 0.30 everywhere fails at a = 0.60 and at a = 0.40, sits exactly on its unstable fixed point at a = 0.30, and recovers completely at a = 0.25. Nothing in the theorem is violated, because a is a parameter of the field rather than a variable of the dynamics, but an intervention that lowered the prevailing threshold would convert a collapsed chain without any excursion and without touching the coupling. Any claim that an acute conversion requires an excursion is conditional on the threshold being fixed, and that conditionality is stated in the main text rather than assumed away.",
-"S10. A crossing at the root propagates only under supercritical coupling",
-"The pulse criterion of the main text, that the chain converts if and only if the root ends the pulse above a₀, is a statement about the root together with a coupling that carries the rest of the chain. Placing the root just above threshold at r₀ = 0.61 with the remaining capacities at zero and integrating to 3 × 104, the whole chain recovers at κ = 0.6, 0.2 and 0.095, and does not at κ = 0.085, 0.05 and 0.01. At κ = 0.085 the state settles at (1, 0.2293, 0.0306, 0.0038), the root recovered and the chain arrested on the partial branch. The boundary is a₀²/4 = 0.090, the same criterion as everywhere else in this work, so the two statements are consistent; the pulse sweep of Fig. 1c was run at κ = 0.6, which is supercritical, and the equivalence there is between the pulse and the crossing of the root, not between the pulse and recovery of the chain at arbitrary coupli ng.",
-"Supplementary Note 7. The collapse criterion, the dual of κc",
-"The main text obtains κc(Q) = a(Q)²/4 by holding the root at 1 after a crossing. The same construction with the root at 0 gives the sharp criterion for the opposite event. With r₀ = 0 the first-stage equilibrium condition is r₁(1 − r₁)(r₁ − a) − κ r₁ = r₁[(1 − r₁)(r₁ − a) − κ] = 0, whose non-zero roots solve r₁² − (1 + a)r₁ + (a + κ) = 0 with discriminant (1 − a)² − 4κ. The surviving high root and its unstable partner collide when that discriminant vanishes, so the exact critical coupling for whole-chain collapse is",
-"κ_{collapse}(Q) = (1 − a(Q))² / 4,",
-"which is 0.040000 at depleted evidence and 0.180625 at consolidated evidence. Bisecting the coupling at which the first stage loses its high equilibrium, with the root held at zero, returned 0.0400000 and 0.1806250; at 0.99 κ_collapse the chain settles at (0.82, 0.98, 1.00) and (0.62, 0.92, 0.99) respectively, and at 1.01 κ_collapse it goes to the failed corner.",
-"Two things follow. First, the sufficient condition of ref. 4 for whole-chain collapse is replaced by an exact one, and the quantity max_x g(x,Q)/x reported there as 0.1806 is this criterion at a₁, computed there without being recognised as such, since max_x (1 − x)(x − a) = (1 − a)²/4 identically. Second, the two criteria are not symmetric, and the asymmetry reverses with evidence. At depleted evidence κ_collapse = 0.040 lies below κc = 0.090, so on (0.040, 0.090) a collapse at the root propagates through the chain while a crossing at the root does not: a system in that window can fall as one and cannot rise as one. At consolidated evidence the ordering reverses, κ_collapse = 0.1806 exceeding κc = 0.005625 by a factor of 32, so a consolidated system propagates recovery far more readily than collapse. Both statements are properties of the capacity block at frozen threshold and inherit the illustrative parameters of ref. 4."
-]
-
-# ============================================================================
-#  PART VI.  Orchestration
-# ============================================================================
 def main():
     ap = argparse.ArgumentParser(
-        description="Reproduce every reported value, Figs. 1-4 and the source data.")
+        description="Reproduce every reported value, Figs. 1-5 and the source data.")
     ap.add_argument("--quick", action="store_true",
                     help="reduced sample sizes; the structure of every run is unchanged")
     ap.add_argument("--no-figures", action="store_true",
                     help="skip the figures and the source-data workbook")
     ap.add_argument("--figures-only", action="store_true",
                     help="redraw the figures from an existing two_axes_results.json")
-    ap.add_argument("--audit", action="store_true",
-                    help="run the compliance audit and write the documents only")
-    ap.add_argument("--figure-layout", choices=("inline", "end"), default="inline",
-                    help="place each figure at its first mention, or keep the "
-                         "legends together at the end with the image above each")
-    args = ap.parse_args()
-    if args.audit:
-        ok = audit(MAIN_PARAS)
-        write_docx(MAIN_PARAS, "two_axes_main.docx", figures=FIGURE_FILES,
-                   layout=args.figure_layout)
-        write_docx(SUPP_PARAS, "two_axes_supplementary.docx", title_first=False)
-        return 0 if ok else 1
+    # parse_known_args so that the script also runs when pasted into a notebook
+    # cell (Jupyter/Colab pass kernel arguments such as -f ... in sys.argv).
+    args, _ = ap.parse_known_args()
     q = args.quick
     t0 = time.time()
     if args.figures_only:
@@ -2137,9 +1771,10 @@ def main():
     R["period_sweep"] = run_period_sweep(quick=q)
     print("=== 10. noise on the branch ===");    R["noise"] = run_noise(quick=q)
     R["noise_curves"] = run_noise_curves(quick=q)
-    print("=== 11. scope of confinement (SN6) ==="); R["scope"] = run_scope()
-    print("=== 12. collapse criterion (SN7) ==="); R["collapse"] = run_collapse()
-    print("=== 13. published aggregate data (Results, Fig. 5) ===")
+    print("=== 11. scope of confinement (Sect. 3.2-3.3) ==="); R["scope"] = run_scope()
+    print("=== 12. collapse criterion (Proposition 6) ==="); R["collapse"] = run_collapse()
+    print("=== 13. journal-version additions (Remark 2, Prop. 8(ii), Prop. 9) ==="); R["review_additions"] = run_review_additions()
+    print("=== 14. published aggregate data (Sect. 11.2, Fig. 5) ===")
     R["published"] = run_published_data(); P = R["published"]
     print("      %d studies, depth %.2f to %.2f, uncorrelated with dose (P = %.2f)"
           % (P["k_studies"], P["depth_lo"], P["depth_hi"], P["depth_p"]))
@@ -2147,17 +1782,12 @@ def main():
           % (P["n_cases"], P["n_in_window"], P["p_binomial"]))
 
     ok = self_check(R)
-    ok = audit(MAIN_PARAS) and ok
 
     if not args.no_figures:
         print("\n=== figures and source data ===")
         for fn in (fig1, fig2, fig3, fig4, fig5):
             print("  wrote", fn(R))
         print("  wrote", write_source_data(R))
-    print("\n=== documents ===")
-    write_docx(MAIN_PARAS, "two_axes_main.docx", figures=FIGURE_FILES,
-                   layout=args.figure_layout)
-    write_docx(SUPP_PARAS, "two_axes_supplementary.docx", title_first=False)
 
     R["_meta"] = dict(quick=q, seconds=time.time() - t0, all_checks_passed=bool(ok))
     with open("two_axes_results.json", "w") as fh:

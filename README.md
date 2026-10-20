@@ -1,117 +1,69 @@
 # catatonia-two-axes
 
-Reproduction code for
+Reproduction code, figures and manuscript files for
 
-> **Catatonia recovery separates two intervention axes that constrain electroconvulsive therapy**
-> H. Saito
+> Saito H. *Catatonia recovery separates two intervention axes that constrain
+> electroconvulsive therapy.* Submitted to the Journal of Mathematical Biology
+> (2026). Preprint: PsyArXiv d6knq. Code: Zenodo concept DOI
+> 10.5281/zenodo.21880298 (resolves to the latest version).
 
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21880298.svg)](https://doi.org/10.5281/zenodo.21880298)
-[![reproduce](https://github.com/entrance4-png/catatonia-two-axes/actions/workflows/reproduce.yml/badge.svg)](https://github.com/entrance4-png/catatonia-two-axes/actions/workflows/reproduce.yml)
+The model is the evidence-coupled bistable cascade of Saito (2026),
+*Evidence-coupled bistability converts dependency structure into a recovery
+geometry* (Research Square rs-10620384), with the illustrative parameters used
+there: a0 = 0.60, a1 = 0.15, p = 2, eps = 0.02, rho = 1, kappa = 0.6.
 
-Everything is in one file, `saito_two_axes_reproduce.py`: the model, every
-analysis reported in the paper, the figures, the source-data workbook, a
-value-by-value verification against the stored results, a submission-compliance
-audit, and the full text of the manuscript and the Supplementary Information
-together with the code that renders them to Word.
+## Contents
 
-## Install
-
-```bash
-git clone https://github.com/entrance4-png/catatonia-two-axes.git
-cd catatonia-two-axes
-python -m venv .venv && source .venv/bin/activate    # optional
-pip install -r requirements.txt
-```
-
-Python 3.9 or newer. Dependencies are `numpy`, `scipy`, `matplotlib` and
-`openpyxl`; nothing else, and no compiled extensions.
-
-## Run
-
-```bash
-python saito_two_axes_reproduce.py                 # full analysis, ~15 min on one core
-python saito_two_axes_reproduce.py --quick         # coarser grids, ~3 min
-python saito_two_axes_reproduce.py --figures       # redraw from an existing results.json
-python saito_two_axes_reproduce.py --verify        # re-check every number the paper prints
-python saito_two_axes_reproduce.py --audit         # Nature Communications compliance
-python saito_two_axes_reproduce.py --docx T.docx   # write the manuscript and the SI
-python saito_two_axes_reproduce.py --outdir out    # put everything in ./out
-```
-
-The flags compose, and a later step produces whatever it needs if it is
-missing, so a single command does a full pass:
-
-```bash
-python saito_two_axes_reproduce.py --figures --verify --audit --outdir out
-```
-
-In a notebook the command line is ignored, because the kernel appends its own
-arguments. Paste the file into a cell and call the helper instead:
-
-```python
-run(quick=True)      # or run(), run(verify=True), run(figures=True)
-show_figures()
-```
-
-## Outputs
-
-| File | Contents |
+| File | What it is |
 |---|---|
-| `results.json` | every number the manuscript reports, plus the trajectories the figures are drawn from |
-| `Fig1.pdf` … `Fig4.pdf` (and `.png`) | the four display items, at the sizes and palette used in the paper |
-| `Source_Data_Figs1-4.xlsx` | one sheet per figure panel, the values as plotted, plus a `Read me` sheet listing the parameters |
-| `staircase.npy` | the Fig. 4d trajectory at full resolution |
-| `Saito_two_axes_NatComms.docx`, `Saito_two_axes_SupplementaryInformation.docx` | written only with `--docx` |
+| `catatonia_two_axes_reproduce.py` | One self-contained script (v3): every reported value, the self-check of each against the printed value (84 checks), the five figures, the source-data workbook and the secondary analysis of published aggregate data. No inputs. |
+| `make_jmb_figures.py` | Redraws Fig1–Fig5 from `two_axes_results.json` in the journal's formats (EPS with embedded fonts, TIFF at 600 dpi, PNG) at a stated printed width, with lower-case panel labels. |
+| `manuscript/catatonia_two_axes_JMB.docx` | The journal manuscript (theorem–proof form, author–year references, figures embedded). |
+| `manuscript/ESM_1.pdf` | Online Resource 1: zero-evidence-rate control for the escape exponent; waiting times to the annihilation locus. |
+| `manuscript/ESM_2.xlsx` | Online Resource 2: source data for Figs 1–5, one sheet per panel, written by the script. |
+| `manuscript/Cover_letter_JMB_v4.docx` | Cover letter. |
+| `figures/` | Fig1–Fig5 as EPS, TIFF (600 dpi) and PNG (300 dpi), 174 mm wide. |
 
-`--docx` needs a template `.docx` for its page setup, styles and footers. None
-of the template's text is used, and no template is shipped here; any Word
-document whose page geometry you want to reuse will do.
+## Running
 
-## What `--verify` checks
+```
+pip install numpy scipy matplotlib openpyxl python-docx
+python3 catatonia_two_axes_reproduce.py            # full run, ~10–20 min
+python3 catatonia_two_axes_reproduce.py --quick    # reduced sample sizes, same structure
+python3 make_jmb_figures.py                        # journal figure files from two_axes_results.json
+```
 
-`--verify` re-reads `results.json` and compares it against every value quoted in
-the manuscript, one line per check. A full run gives **116 checks, 0 failed**; a
-`--quick` run reports the same for the grid-independent subset and states how
-many grid-size-dependent checks it skipped.
+The full run prints a self-check table of 84 lines; every line must read `OK`.
+The `--quick` run reduces sample sizes and may miss one or two of the
+regression-based checks by design.
 
-Values are compared at the precision the manuscript prints, not at a longer
-internal precision, so a number cannot pass the check while the text is wrong by
-a rounding step.
+## Versions
 
-Two structural checks are also run: every source-data sheet corresponds to a
-panel the figure legends declare, and every panel that carries data has a sheet.
+**v3** (this release) removes from the script the preprint manuscript text, its
+journal-compliance audit (abstract length, numbered citations) and the docx
+renderer, which belonged to the preprint and no longer match the journal
+manuscript. The script now reproduces numbers, figures and source data only;
+the manuscript lives in `manuscript/`. Computations and checks are unchanged
+from v2.
 
-## What `--audit` checks
+**v2** added section 13 of the script (`run_review_additions`) and its
+self-checks, the only computational change from the preprint version v1:
 
-The formal Nature Communications rules for an Article: title length and
-punctuation, abstract length and absence of citations, main-text length,
-subheading length, number of display items, absence of em dashes, references
-numbered in order of first appearance with every entry cited and locatable,
-figures and panels cited in order, cross-references to the Supplementary Notes,
-and section order.
+* **Remark 2 / Theorem 3.** At a = 0.60 and kappa = 0.01 (subcritical), a first
+  stage started above its unstable rest point r+ = 0.5828 recovers while the
+  second stage arrests; started below r+, or from the collapsed configuration,
+  nothing recovers. Theorem 3 is stated for the collapsed downstream start.
+* **Proposition 8(ii).** Passage time of the first stage through the fold,
+  compared with pi / ((1 − a/2) sqrt(delta)): ratio 0.916, 0.973, 0.992 at
+  delta = 1e-4, 1e-5, 1e-6, with a constant O(1) difference.
+* **Proposition 9.** The exact two-stage inversion of the threshold from the
+  first two resting levels (equal coupling), its recovery of a = 0.15 to
+  fourteen digits, and its sensitivity to 1 % errors in r1 and r2.
 
-The audit exits non-zero while any identifier in the text is still a
-placeholder, which is deliberate: it is the last thing to fix before submission.
+All earlier computations, figures and checks are unchanged. The sheet names in
+`ESM_2.xlsx` use the preprint's upper-case panel letters; the journal manuscript
+uses lower case.
 
-## Reproducibility notes
+## Licence
 
-- All randomness is drawn from a single seeded generator (`SEED` near the top of
-  the file), so a full run is bit-for-bit repeatable on the same NumPy version.
-- Integration uses an adaptive stiff solver at relative tolerance 1e-10 and
-  absolute tolerance 1e-13, with event detection for crossings.
-- Step 5 (intermittent modulation) is the slowest, roughly half the total, and
-  prints per-cell progress so a long run is not mistaken for a hang.
-- Parameters are the unfitted illustrative set of the model this work builds on:
-  `a0 = 0.60`, `a1 = 0.15`, `p = 2`, `eps = 0.02`, `rho = 1`, `kappa = 0.6`.
-
-## Citation
-
-If you use this code, please cite the software and the paper. The Zenodo DOI
-[10.5281/zenodo.21880298](https://doi.org/10.5281/zenodo.21880298) is the concept
-DOI: it represents all versions and always resolves to the latest one.
-`CITATION.cff` is machine-readable and GitHub renders it as a "Cite this
-repository" button. ORCID: [0000-0002-4964-8559](https://orcid.org/0000-0002-4964-8559).
-
-## License
-
-MIT, see [`LICENSE`](LICENSE).
+MIT. See `LICENSE`.
