@@ -1,6 +1,6 @@
 # catatonia-two-axes
 
-Reproduction code, figures and manuscript files for
+Reproduction code and figures for
 
 > Saito H. *Catatonia recovery separates two intervention axes that constrain
 > electroconvulsive therapy.* Submitted to the Journal of Mathematical Biology
@@ -18,10 +18,6 @@ there: a0 = 0.60, a1 = 0.15, p = 2, eps = 0.02, rho = 1, kappa = 0.6.
 |---|---|
 | `catatonia_two_axes_reproduce.py` | One self-contained script (v3.1): every reported value, the self-check of each against the printed value (84 checks), the five figures, the source-data workbook and the secondary analysis of published aggregate data. No inputs. |
 | `make_jmb_figures.py` | Redraws Fig1–Fig5 from `two_axes_results.json` in the journal's formats (EPS with embedded fonts, TIFF at 600 dpi, PNG) at a stated printed width, with lower-case panel labels. |
-| `manuscript/catatonia_two_axes_JMB.docx` | The journal manuscript (theorem–proof form, author–year references, figures embedded). |
-| `manuscript/ESM_1.pdf` | Online Resource 1: zero-evidence-rate control for the escape exponent; waiting times to the annihilation locus. |
-| `manuscript/ESM_2.xlsx` | Online Resource 2: source data for Figs 1–5, one sheet per panel, written by the script. |
-| `manuscript/Cover_letter_JMB_v4.docx` | Cover letter. |
 | `figures/` | Fig1–Fig5 as EPS, TIFF (600 dpi) and PNG (300 dpi), 174 mm wide. |
 
 ## Running
@@ -54,7 +50,8 @@ statistics carry the corrected printed values. Nothing else changes.
 journal-compliance audit (abstract length, numbered citations) and the docx
 renderer, which belonged to the preprint and no longer match the journal
 manuscript. The script now reproduces numbers, figures and source data only;
-the manuscript lives in `manuscript/`. Computations and checks are unchanged
+the manuscript and its Online Resources are held by the journal and are not
+kept in this repository. Computations and checks are unchanged
 from v2.
 
 **v2** added section 13 of the script (`run_review_additions`) and its
@@ -72,8 +69,9 @@ self-checks, the only computational change from the preprint version v1:
   fourteen digits, and its sensitivity to 1 % errors in r1 and r2.
 
 All earlier computations, figures and checks are unchanged. The sheet names in
-`ESM_2.xlsx` use the preprint's upper-case panel letters; the journal manuscript
-uses lower case.
+the source-data workbook written by the script (Online Resource 2, `ESM_2.xlsx`)
+use the preprint's upper-case panel letters; the journal manuscript uses lower
+case.
 
 ## Licence
 
