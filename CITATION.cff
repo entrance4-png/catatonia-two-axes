@@ -6,8 +6,8 @@ authors:
     given-names: Hiroki
     orcid: "https://orcid.org/0000-0002-4964-8559"
     affiliation: "Department of Neuropsychiatry, Graduate School of Medicine, Nippon Medical School; Onda-daini Hospital"
-version: "3.1.0"
-date-released: "2026-10-20"
+version: "3.1.1"
+date-released: "2026-10-28"
 license: MIT
 repository-code: "https://github.com/entrance4-png/catatonia-two-axes"
 doi: "10.5281/zenodo.21880298"
